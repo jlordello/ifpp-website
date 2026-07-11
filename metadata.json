@@ -1,0 +1,6 @@
+{
+  "name": "IFPP - Instituto de Políticas Públicas",
+  "description": "Site institucional e painel de transparência do Instituto de Formação e Promoção de Políticas Públicas (IFPP)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -3,7 +3,7 @@ import { TransparencyRecord, Project, Emenda, RecordType, ProjectType, AdminUser
 import { 
   Settings, Key, Plus, Trash2, Link as LinkIcon, FileCheck, Landmark, 
   Calendar, Layers, Sparkles, CheckCircle2, RefreshCw, Info, DollarSign, ListCollapse,
-  Edit, X, AlertTriangle, FileText, UploadCloud, User, Shield, Lock, Paperclip
+  Edit, X, AlertTriangle, FileText, UploadCloud, User, Shield, Lock, Paperclip, Copy, MessageSquare
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -55,6 +55,7 @@ export default function AdminPanel({
   // Login State
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState(false);
 
   // Active Section Inside Admin Panel
@@ -65,6 +66,48 @@ export default function AdminPanel({
   const [newPassword, setNewPassword] = useState('');
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'editor' | 'viewer'>('editor');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showResetAdminModal, setShowResetAdminModal] = useState(false);
+  const [confirmResetText, setConfirmResetText] = useState('');
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showProfileNewPassword, setShowProfileNewPassword] = useState(false);
+  const [showConfirmProfilePassword, setShowConfirmProfilePassword] = useState(false);
+
+  // Newly created or password-reset credentials modal
+  const [credentialsToCopy, setCredentialsToCopy] = useState<{
+    name: string;
+    username: string;
+    password: string;
+    actionType: 'creation' | 'reset' | 'profile-change';
+  } | null>(null);
+
+  // Password reset confirmation modal state
+  const [userToResetPassword, setUserToResetPassword] = useState<AdminUser | null>(null);
+  const [tempResetPassword, setTempResetPassword] = useState('');
+
+  const generateRandomPassword = () => {
+    // Generates a simple, secure 8-character password that is easy to read
+    const letters = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
+    const numbers = '23456789';
+    const specials = '@#$%&*';
+    
+    let pass = '';
+    // ensure at least 1 uppercase, 1 lowercase, 1 number, 1 special
+    pass += letters.charAt(Math.floor(Math.random() * 24)); // lowercase approximate
+    pass += letters.charAt(Math.floor(Math.random() * 25) + 24); // uppercase approximate
+    pass += numbers.charAt(Math.floor(Math.random() * numbers.length));
+    pass += specials.charAt(Math.floor(Math.random() * specials.length));
+    
+    // Fill the rest up to 8 chars
+    const allAllowed = letters + numbers + specials;
+    for (let i = 0; i < 4; i++) {
+      pass += allAllowed.charAt(Math.floor(Math.random() * allAllowed.length));
+    }
+    
+    // Shuffle the characters
+    return pass.split('').sort(() => 0.5 - Math.random()).join('');
+  };
 
   // Change Password State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -107,7 +150,7 @@ export default function AdminPanel({
   const [deleteConfirm, setDeleteConfirm] = useState<{
     id: string;
     title: string;
-    type: 'record' | 'project' | 'emenda';
+    type: 'record' | 'project' | 'emenda' | 'user';
     onConfirm: () => void;
   } | null>(null);
   
@@ -381,6 +424,25 @@ export default function AdminPanel({
     }
   };
 
+  const handleRestoreAdminPassword = async () => {
+    const adminUser = users.find(u => u.username === 'admin') || {
+      id: 'user-admin',
+      username: 'admin',
+      name: 'Administrador Principal',
+      password: 'admin123',
+      role: 'admin'
+    };
+
+    await onUpdateUser({
+      ...adminUser,
+      password: 'admin123'
+    });
+
+    showNotification('A senha do usuário admin foi redefinida com sucesso para "admin123"!');
+    setShowResetAdminModal(false);
+    setConfirmResetText('');
+  };
+
   const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault();
     if (!newUsername.trim() || !newPassword.trim() || !newName.trim()) {
@@ -392,17 +454,29 @@ export default function AdminPanel({
       showNotification('Este nome de usuário já está cadastrado.');
       return;
     }
-    await onAddUser({
+
+    const userPayload = {
       id: newUsername.trim().toLowerCase(),
       username: newUsername.trim().toLowerCase(),
       password: newPassword,
       name: newName.trim(),
       role: newRole
+    };
+
+    await onAddUser(userPayload);
+
+    // Save credentials to open copying tab/modal
+    setCredentialsToCopy({
+      name: userPayload.name,
+      username: userPayload.username,
+      password: userPayload.password,
+      actionType: 'creation'
     });
+
     setNewUsername('');
-    setNewPassword('');
     setNewName('');
     setNewRole('editor');
+    setNewPassword(generateRandomPassword());
     showNotification('Novo usuário cadastrado com sucesso!');
   };
 
@@ -425,6 +499,14 @@ export default function AdminPanel({
       ...loggedInUser,
       password: newProfilePassword
     });
+
+    setCredentialsToCopy({
+      name: loggedInUser.name,
+      username: loggedInUser.username,
+      password: newProfilePassword,
+      actionType: 'profile-change'
+    });
+
     setCurrentPassword('');
     setNewProfilePassword('');
     setConfirmProfilePassword('');
@@ -544,7 +626,14 @@ export default function AdminPanel({
   // Login Form Render
   if (!isAdminLoggedIn) {
     return (
-      <div id="admin-login-view" className="bg-slate-50 min-h-screen py-20 px-4 flex items-center justify-center">
+      <div id="admin-login-view" className="bg-slate-50 min-h-screen py-20 px-4 flex flex-col items-center justify-center gap-4">
+        {notification && (
+          <div className="max-w-md w-full p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-emerald-800 text-xs sm:text-sm shadow-md animate-in fade-in duration-200">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span className="font-medium">{notification}</span>
+          </div>
+        )}
+
         <div className="max-w-md w-full bg-white p-8 rounded-2xl border border-slate-100 shadow-xl space-y-6">
           <div className="text-center space-y-3">
             <div className="w-12 h-12 rounded-xl bg-indigo-900 text-white flex items-center justify-center mx-auto shadow-md">
@@ -573,12 +662,20 @@ export default function AdminPanel({
               <div className="relative">
                 <Key className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
                 <input
-                  type="password"
+                  type={showLoginPassword ? "text" : "password"}
                   placeholder="Digite sua senha"
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
-                  className="w-full text-sm pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 font-mono"
+                  className="w-full text-sm pl-10 pr-10 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 font-mono"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  title={showLoginPassword ? "Ocultar senha" : "Exibir senha"}
+                >
+                  {showLoginPassword ? <Lock className="w-4 h-4" /> : <Key className="w-4 h-4" />}
+                </button>
               </div>
               {loginError && (
                 <p className="text-xs text-rose-500 font-medium mt-1.5">Usuário ou senha incorretos. Por favor, tente novamente.</p>
@@ -592,7 +689,71 @@ export default function AdminPanel({
               Autenticar Acesso
             </button>
           </form>
+
+          <div className="text-center border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setShowResetAdminModal(true);
+                setConfirmResetText('');
+              }}
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-bold transition-colors cursor-pointer"
+            >
+              Esqueceu a senha do Administrador? Redefinir para o padrão
+            </button>
+          </div>
         </div>
+
+        {/* Modal de Recuperação de Senha do Admin */}
+        {showResetAdminModal && (
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150">
+              <div className="p-6">
+                <div className="flex items-center gap-3 text-indigo-900 mb-4">
+                  <div className="p-2 bg-indigo-50 rounded-full">
+                    <Key className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900">Restaurar Senha do Admin</h3>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed mb-4">
+                  Caso tenha perdido o acesso à conta de administrador, você pode redefinir a senha do usuário <strong className="text-slate-900">"admin"</strong> de volta para o padrão de fábrica: <strong className="text-emerald-700 font-mono">admin123</strong>.
+                </p>
+                
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1.5 text-xs">Digite a palavra <strong className="text-indigo-950">REDEFINIR</strong> para confirmar:</label>
+                  <input
+                    type="text"
+                    placeholder="REDEFINIR"
+                    value={confirmResetText}
+                    onChange={(e) => setConfirmResetText(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-mono uppercase"
+                  />
+                </div>
+              </div>
+              <div className="bg-slate-50 px-6 py-4 flex flex-col sm:flex-row sm:justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowResetAdminModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={confirmResetText.trim().toUpperCase() !== 'REDEFINIR'}
+                  onClick={handleRestoreAdminPassword}
+                  className={`px-4 py-2 text-xs font-bold text-white rounded-lg transition-colors cursor-pointer ${
+                    confirmResetText.trim().toUpperCase() === 'REDEFINIR'
+                      ? 'bg-indigo-900 hover:bg-indigo-950 shadow-xs'
+                      : 'bg-slate-300 cursor-not-allowed'
+                  }`}
+                >
+                  Confirmar Redefinição
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -689,7 +850,12 @@ export default function AdminPanel({
 
             {loggedInUser?.role === 'admin' && (
               <button
-                onClick={() => setAdminSection('usuarios')}
+                onClick={() => {
+                  setAdminSection('usuarios');
+                  if (!newPassword) {
+                    setNewPassword(generateRandomPassword());
+                  }
+                }}
                 className={`w-full text-left px-4 py-3 rounded-lg text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer ${
                   adminSection === 'usuarios' ? 'bg-indigo-900 text-white' : 'text-slate-600 hover:bg-slate-50'
                 }`}
@@ -1673,15 +1839,38 @@ export default function AdminPanel({
                     </div>
 
                     <div>
-                      <label className="block text-slate-500 font-bold mb-1.5 font-sans">Senha do Usuário *</label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="Mínimo 4 caracteres"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
-                      />
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-slate-500 font-bold font-sans">Senha do Usuário *</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewPassword(generateRandomPassword());
+                            showNotification('Nova senha aleatória gerada!');
+                          }}
+                          className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Gerar Outra Senha
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showNewPassword ? "text" : "password"}
+                          required
+                          placeholder="Ex: Senha123"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="w-full p-2.5 pr-10 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          title={showNewPassword ? "Ocultar senha" : "Exibir senha"}
+                        >
+                          {showNewPassword ? <Lock className="w-4 h-4" /> : <Key className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -1718,6 +1907,7 @@ export default function AdminPanel({
                           <th className="px-4 py-3">Nome Completo</th>
                           <th className="px-4 py-3">Usuário / Login</th>
                           <th className="px-4 py-3">Perfil / Acesso</th>
+                          <th className="px-4 py-3 text-center">Redefinir Senha</th>
                           <th className="px-4 py-3 text-center">Excluir</th>
                         </tr>
                       </thead>
@@ -1734,6 +1924,23 @@ export default function AdminPanel({
                               }`}>
                                 {u.role === 'admin' ? 'Administrador' : u.role === 'editor' ? 'Editor' : 'Visualizador'}
                               </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              {u.username === 'admin' ? (
+                                <span className="text-[10px] text-slate-400 font-medium italic">Bloqueado</span>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setUserToResetPassword(u);
+                                    setTempResetPassword(generateRandomPassword());
+                                  }}
+                                  className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                                  title="Redefinir Senha do Usuário"
+                                >
+                                  <Key className="w-4 h-4" />
+                                  <span className="text-[10px] font-bold">Redefinir</span>
+                                </button>
+                              )}
                             </td>
                             <td className="px-4 py-3.5 text-center">
                               {u.username === 'admin' ? (
@@ -1785,38 +1992,68 @@ export default function AdminPanel({
                   <form onSubmit={handleChangePassword} className="max-w-md space-y-4 text-xs">
                     <div>
                       <label className="block text-slate-500 font-bold mb-1.5 font-sans">Senha Atual *</label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="Sua senha de login atual"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showCurrentPassword ? "text" : "password"}
+                          required
+                          placeholder="Sua senha de login atual"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          className="w-full pl-2.5 pr-10 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          title={showCurrentPassword ? "Ocultar senha" : "Exibir senha"}
+                        >
+                          {showCurrentPassword ? <Lock className="w-4 h-4" /> : <Key className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
 
                     <div>
                       <label className="block text-slate-500 font-bold mb-1.5 font-sans">Nova Senha *</label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="Mínimo de 4 caracteres"
-                        value={newProfilePassword}
-                        onChange={(e) => setNewProfilePassword(e.target.value)}
-                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showProfileNewPassword ? "text" : "password"}
+                          required
+                          placeholder="Mínimo de 4 caracteres"
+                          value={newProfilePassword}
+                          onChange={(e) => setNewProfilePassword(e.target.value)}
+                          className="w-full pl-2.5 pr-10 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowProfileNewPassword(!showProfileNewPassword)}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          title={showProfileNewPassword ? "Ocultar senha" : "Exibir senha"}
+                        >
+                          {showProfileNewPassword ? <Lock className="w-4 h-4" /> : <Key className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
 
                     <div>
                       <label className="block text-slate-500 font-bold mb-1.5 font-sans">Confirmar Nova Senha *</label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="Digite a nova senha novamente"
-                        value={confirmProfilePassword}
-                        onChange={(e) => setConfirmProfilePassword(e.target.value)}
-                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showConfirmProfilePassword ? "text" : "password"}
+                          required
+                          placeholder="Digite a nova senha novamente"
+                          value={confirmProfilePassword}
+                          onChange={(e) => setConfirmProfilePassword(e.target.value)}
+                          className="w-full pl-2.5 pr-10 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmProfilePassword(!showConfirmProfilePassword)}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          title={showConfirmProfilePassword ? "Ocultar senha" : "Exibir senha"}
+                        >
+                          {showConfirmProfilePassword ? <Lock className="w-4 h-4" /> : <Key className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="pt-4">
@@ -2105,6 +2342,257 @@ export default function AdminPanel({
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Copiar Credenciais */}
+      {credentialsToCopy && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+            <div className="p-6 sm:p-8">
+              <div className="flex items-center gap-3 text-indigo-900 mb-4">
+                <div className="p-2.5 bg-indigo-50 rounded-full text-indigo-600">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 font-sans">
+                    {credentialsToCopy.actionType === 'creation' 
+                      ? 'Conta Criada com Sucesso!' 
+                      : credentialsToCopy.actionType === 'profile-change'
+                      ? 'Sua Senha foi Alterada!'
+                      : 'Senha Redefinida com Sucesso!'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {credentialsToCopy.actionType === 'creation'
+                      ? 'Abaixo estão os dados de acesso para o novo usuário.'
+                      : credentialsToCopy.actionType === 'profile-change'
+                      ? 'As suas credenciais de segurança foram atualizadas.'
+                      : 'A senha do usuário foi alterada com sucesso.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Box de Credenciais rápidas */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5 space-y-2.5 text-xs">
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500 font-medium">Nome:</span>
+                  <span className="font-bold text-slate-800">{credentialsToCopy.name}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500 font-medium">Usuário/Login:</span>
+                  <span className="font-mono font-bold text-slate-800 bg-slate-200/60 px-1.5 py-0.5 rounded">{credentialsToCopy.username}</span>
+                </div>
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-slate-500 font-medium">Senha:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{credentialsToCopy.password}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(credentialsToCopy.password);
+                        showNotification('Senha copiada para área de transferência!');
+                      }}
+                      className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors cursor-pointer"
+                      title="Copiar apenas a senha"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mensagem Completa Pré-formatada para Envio */}
+              {credentialsToCopy.actionType === 'profile-change' ? (
+                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs leading-relaxed space-y-1.5">
+                  <strong className="block text-emerald-950 font-bold">✓ Alerta de Segurança:</strong>
+                  <p>Sua senha pessoal de login foi salva e sincronizada com segurança com o banco de dados da instituição (Firestore).</p>
+                  <p>Não se esqueça de usar esta nova chave no seu próximo login ao acessar este painel.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-500">Mensagem para enviar ao usuário (WhatsApp/E-mail):</label>
+                  <textarea
+                    readOnly
+                    rows={6}
+                    value={`Olá, ${credentialsToCopy.name}!
+ 
+Sua conta de acesso ao Painel Administrativo do IFPP foi ${credentialsToCopy.actionType === 'creation' ? 'criada' : 'atualizada'} com sucesso.
+
+Aqui estão suas credenciais de acesso:
+🔗 Link do Painel: https://ifpp.com.br/admin
+👤 Usuário/Login: ${credentialsToCopy.username}
+🔑 Senha de Acesso: ${credentialsToCopy.password}
+
+Guarde estas informações com segurança e não as compartilhe com ninguém.`}
+                    className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 text-slate-700 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed resize-none"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-50 px-6 sm:px-8 py-4 flex flex-col sm:flex-row sm:justify-end gap-2.5 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setCredentialsToCopy(null)}
+                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer text-center"
+              >
+                Fechar
+              </button>
+              {credentialsToCopy.actionType !== 'profile-change' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const msgText = `Olá, ${credentialsToCopy.name}!
+ 
+Sua conta de acesso ao Painel Administrativo do IFPP foi ${credentialsToCopy.actionType === 'creation' ? 'criada' : 'atualizada'} com sucesso.
+
+Aqui estão suas credenciais de acesso:
+🔗 Link do Painel: https://ifpp.com.br/admin
+👤 Usuário/Login: ${credentialsToCopy.username}
+🔑 Senha de Acesso: ${credentialsToCopy.password}
+
+Guarde estas informações com segurança e não as compartilhe com ninguém.`;
+                      navigator.clipboard.writeText(msgText);
+                      showNotification('Mensagem copiada para a área de transferência!');
+                    }}
+                    className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer text-center"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Copiar Mensagem
+                  </button>
+
+                  <a
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Olá, ${credentialsToCopy.name}!
+ 
+Sua conta de acesso ao Painel Administrativo do IFPP foi ${credentialsToCopy.actionType === 'creation' ? 'criada' : 'atualizada'} com sucesso.
+
+Aqui estão suas credenciais de acesso:
+🔗 Link do Painel: https://ifpp.com.br/admin
+👤 Usuário/Login: ${credentialsToCopy.username}
+🔑 Senha de Acesso: ${credentialsToCopy.password}
+
+Guarde estas informações com segurança e não as compartilhe com ninguém.`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      const msgText = `Olá, ${credentialsToCopy.name}!
+ 
+Sua conta de acesso ao Painel Administrativo do IFPP foi ${credentialsToCopy.actionType === 'creation' ? 'criada' : 'atualizada'} com sucesso.
+
+Aqui estão suas credenciais de acesso:
+🔗 Link do Painel: https://ifpp.com.br/admin
+👤 Usuário/Login: ${credentialsToCopy.username}
+🔑 Senha de Acesso: ${credentialsToCopy.password}
+
+Guarde estas informações com segurança e não as compartilhe com ninguém.`;
+                      navigator.clipboard.writeText(msgText);
+                      showNotification('Mensagem copiada! Abrindo WhatsApp...');
+                    }}
+                    className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer text-center"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Enviar p/ WhatsApp
+                  </a>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Redefinição de Senha */}
+      {userToResetPassword && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 text-amber-600 mb-4">
+                <div className="p-2 bg-amber-50 rounded-full">
+                  <Key className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 font-sans">Redefinir Senha</h3>
+                  <p className="text-xs text-slate-500">Alterando senha do usuário: <strong className="text-slate-700">{userToResetPassword.name}</strong></p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-500 uppercase">Nova Senha de Acesso *</label>
+                    <button
+                      type="button"
+                      onClick={() => setTempResetPassword(generateRandomPassword())}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3 animate-spin-once" />
+                      Gerar Nova Senha
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      required
+                      placeholder="Mínimo 4 caracteres"
+                      value={tempResetPassword}
+                      onChange={(e) => setTempResetPassword(e.target.value)}
+                      className="w-full p-2.5 pr-10 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm text-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showNewPassword ? <Lock className="w-4 h-4" /> : <Key className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 px-6 py-4 flex flex-col sm:flex-row sm:justify-end gap-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setUserToResetPassword(null);
+                  setTempResetPassword('');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (tempResetPassword.length < 4) {
+                    showNotification('A nova senha deve ter pelo menos 4 caracteres.');
+                    return;
+                  }
+                  
+                  const updatedUser = {
+                    ...userToResetPassword,
+                    password: tempResetPassword
+                  };
+                  
+                  await onUpdateUser(updatedUser);
+                  
+                  setCredentialsToCopy({
+                    name: updatedUser.name,
+                    username: updatedUser.username,
+                    password: updatedUser.password,
+                    actionType: 'reset'
+                  });
+                  
+                  setUserToResetPassword(null);
+                  setTempResetPassword('');
+                  showNotification('Senha alterada com sucesso!');
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-indigo-900 hover:bg-indigo-950 rounded-lg transition-colors cursor-pointer shadow-xs"
+              >
+                Salvar Nova Senha
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -8,6 +8,15 @@ import AdminPanel from './components/AdminPanel';
 
 import { TransparencyRecord, Project, Emenda } from './types';
 import { initialProjects, initialEmendas, initialRecords } from './data/initialData';
+import { 
+  syncCollection, 
+  saveRecord, 
+  removeRecord, 
+  saveProject, 
+  removeProject, 
+  saveEmenda, 
+  removeEmenda 
+} from './lib/firebase';
 
 export default function App() {
   // 1. Tab Routing
@@ -24,67 +33,26 @@ export default function App() {
     }
   });
 
-  // 3. Central Dynamic States loaded lazily from localStorage or seeds
-  const [records, setRecords] = useState<TransparencyRecord[]>(() => {
-    try {
-      const saved = localStorage.getItem('ifpp_records_v1');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {
-      console.error("Error parsing records from localStorage", e);
-    }
-    return initialRecords;
-  });
+  // 3. Central Dynamic States synchronized with Firestore online
+  const [records, setRecords] = useState<TransparencyRecord[]>(initialRecords);
+  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  const [emendas, setEmendas] = useState<Emenda[]>(initialEmendas);
 
-  const [projects, setProjects] = useState<Project[]>(() => {
-    try {
-      const saved = localStorage.getItem('ifpp_projects_v1');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {
-      console.error("Error parsing projects from localStorage", e);
-    }
-    return initialProjects;
-  });
-
-  const [emendas, setEmendas] = useState<Emenda[]>(() => {
-    try {
-      const saved = localStorage.getItem('ifpp_emendas_v1');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {
-      console.error("Error parsing emendas from localStorage", e);
-    }
-    return initialEmendas;
-  });
-
-  // 4. Persistence Effect hooks
+  // 4. Online Database Synchronization Effects
   useEffect(() => {
-    try {
-      localStorage.setItem('ifpp_records_v1', JSON.stringify(records));
-    } catch (e) {
-      console.warn("Could not save records to localStorage", e);
-    }
-  }, [records]);
+    // Sync records collection
+    const unsubscribeRecords = syncCollection<TransparencyRecord>('records', setRecords, initialRecords);
+    // Sync projects collection
+    const unsubscribeProjects = syncCollection<Project>('projects', setProjects, initialProjects);
+    // Sync emendas collection
+    const unsubscribeEmendas = syncCollection<Emenda>('emendas', setEmendas, initialEmendas);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('ifpp_projects_v1', JSON.stringify(projects));
-    } catch (e) {
-      console.warn("Could not save projects to localStorage", e);
-    }
-  }, [projects]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('ifpp_emendas_v1', JSON.stringify(emendas));
-    } catch (e) {
-      console.warn("Could not save emendas to localStorage", e);
-    }
-  }, [emendas]);
+    return () => {
+      unsubscribeRecords();
+      unsubscribeProjects();
+      unsubscribeEmendas();
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -144,6 +112,11 @@ export default function App() {
     }
   }, [activeTab]);
 
+  // Scroll to top of window whenever the active tab changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, [activeTab]);
+
   // 5. Auth Actions
   const handleLogin = (password: string): boolean => {
     if (password === 'admin123') {
@@ -158,25 +131,36 @@ export default function App() {
   };
 
   // 6. Record CRUD Actions
-  const addRecord = (newRecord: Omit<TransparencyRecord, 'id'>) => {
+  const addRecord = async (newRecord: Omit<TransparencyRecord, 'id'>) => {
     const recordWithId: TransparencyRecord = {
       ...newRecord,
       id: `rec-${Date.now()}`
     };
-    setRecords(prev => [recordWithId, ...prev]);
+    try {
+      await saveRecord(recordWithId);
+    } catch (e) {
+      console.error("Error saving record to Firestore", e);
+    }
   };
 
-  const deleteRecord = (id: string) => {
-    setRecords(prev => prev.filter(r => r.id !== id));
+  const deleteRecord = async (id: string) => {
+    try {
+      await removeRecord(id);
+    } catch (e) {
+      console.error("Error deleting record from Firestore", e);
+    }
   };
 
-  const updateRecord = (updatedRecord: TransparencyRecord) => {
-    setRecords(prev => prev.map(r => r.id === updatedRecord.id ? updatedRecord : r));
+  const updateRecord = async (updatedRecord: TransparencyRecord) => {
+    try {
+      await saveRecord(updatedRecord);
+    } catch (e) {
+      console.error("Error updating record in Firestore", e);
+    }
   };
 
   // 7. Project CRUD Actions
-  const addProject = (newProject: Omit<Project, 'id'>) => {
-    // Generate simple slug id
+  const addProject = async (newProject: Omit<Project, 'id'>) => {
     const slug = newProject.title
       .toLowerCase()
       .normalize("NFD")
@@ -187,54 +171,84 @@ export default function App() {
       ...newProject,
       id: `proj-${slug}-${Date.now()}`
     };
-    setProjects(prev => [...prev, projWithId]);
 
-    // If an emenda is linked to this project, automatically update the emenda's allocatedProjectId
-    if (newProject.emendaId) {
-      setEmendas(prevEmendas => 
-        prevEmendas.map(em => 
-          em.id === newProject.emendaId 
-            ? { ...em, allocatedProjectId: projWithId.id }
-            : em
-        )
-      );
+    try {
+      await saveProject(projWithId);
+
+      // If an emenda is linked to this project, automatically update the emenda's allocatedProjectId
+      if (newProject.emendaId) {
+        const em = emendas.find(e => e.id === newProject.emendaId);
+        if (em) {
+          await saveEmenda({ ...em, allocatedProjectId: projWithId.id });
+        }
+      }
+    } catch (e) {
+      console.error("Error creating project in Firestore", e);
     }
   };
 
-  const deleteProject = (id: string) => {
-    setProjects(prev => prev.filter(p => p.id !== id));
-    // Remove references in emendas
-    setEmendas(prev => prev.map(em => em.allocatedProjectId === id ? { ...em, allocatedProjectId: undefined } : em));
-    // Remove references in records
-    setRecords(prev => prev.map(rec => rec.projectLinked === id ? { ...rec, projectLinked: undefined } : rec));
+  const deleteProject = async (id: string) => {
+    try {
+      await removeProject(id);
+      
+      // Remove references in emendas
+      for (const em of emendas) {
+        if (em.allocatedProjectId === id) {
+          await saveEmenda({ ...em, allocatedProjectId: undefined });
+        }
+      }
+      // Remove references in records
+      for (const rec of records) {
+        if (rec.projectLinked === id) {
+          await saveRecord({ ...rec, projectLinked: undefined });
+        }
+      }
+    } catch (e) {
+      console.error("Error deleting project in Firestore", e);
+    }
   };
 
   // 8. Emenda CRUD Actions
-  const addEmenda = (newEmenda: Omit<Emenda, 'id'>) => {
+  const addEmenda = async (newEmenda: Omit<Emenda, 'id'>) => {
     const emendaWithId: Emenda = {
       ...newEmenda,
       id: `emenda-${Date.now()}`
     };
-    setEmendas(prev => [...prev, emendaWithId]);
 
-    // If a project is linked, update that project's emendaId
-    if (newEmenda.allocatedProjectId) {
-      setProjects(prevProj => 
-        prevProj.map(p => 
-          p.id === newEmenda.allocatedProjectId 
-            ? { ...p, emendaId: emendaWithId.id }
-            : p
-        )
-      );
+    try {
+      await saveEmenda(emendaWithId);
+
+      // If a project is linked, update that project's emendaId
+      if (newEmenda.allocatedProjectId) {
+        const p = projects.find(proj => proj.id === newEmenda.allocatedProjectId);
+        if (p) {
+          await saveProject({ ...p, emendaId: emendaWithId.id });
+        }
+      }
+    } catch (e) {
+      console.error("Error creating emenda in Firestore", e);
     }
   };
 
-  const deleteEmenda = (id: string) => {
-    setEmendas(prev => prev.filter(e => e.id !== id));
-    // Remove references in projects
-    setProjects(prev => prev.map(p => p.emendaId === id ? { ...p, emendaId: undefined } : p));
-    // Remove references in records
-    setRecords(prev => prev.map(rec => rec.fundingSource === id ? { ...rec, fundingSource: undefined } : rec));
+  const deleteEmenda = async (id: string) => {
+    try {
+      await removeEmenda(id);
+
+      // Remove references in projects
+      for (const p of projects) {
+        if (p.emendaId === id) {
+          await saveProject({ ...p, emendaId: undefined });
+        }
+      }
+      // Remove references in records
+      for (const rec of records) {
+        if (rec.fundingSource === id) {
+          await saveRecord({ ...rec, fundingSource: undefined });
+        }
+      }
+    } catch (e) {
+      console.error("Error deleting emenda in Firestore", e);
+    }
   };
 
   // 9. Tab Renderer Switch

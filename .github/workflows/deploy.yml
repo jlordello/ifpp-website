@@ -1,0 +1,32 @@
+name: Deploy Automático na VPS
+
+on:
+  push:
+    branches:
+      - main  # Ou 'master', dependendo de como está o nome da sua branch principal
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Executar comandos na VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            # Ativa o ambiente do NVM para reconhecer o Node v20 corretamente
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            
+            # Entra na pasta do site, baixa as novidades e compila
+            cd /var/www/ifpp-website
+            git pull origin main
+            npm install
+            npm run build
+            
+            # Reinicia o servidor web
+            sudo systemctl restart nginx

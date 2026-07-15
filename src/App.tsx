@@ -6,7 +6,7 @@ import ProjectsTab from './components/ProjectsTab';
 import TransparencyTab from './components/TransparencyTab';
 import AdminPanel from './components/AdminPanel';
 
-import { TransparencyRecord, Project, Emenda } from './types';
+import { TransparencyRecord, Project, Emenda, AdminUser } from './types';
 import { initialProjects, initialEmendas, initialRecords } from './data/initialData';
 import { 
   syncCollection, 
@@ -15,7 +15,10 @@ import {
   saveProject, 
   removeProject, 
   saveEmenda, 
-  removeEmenda 
+  removeEmenda,
+  initialUsers,
+  saveUser,
+  removeUser
 } from './lib/firebase';
 
 export default function App() {
@@ -23,20 +26,23 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('home');
 
   // 2. Auth State
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+  const [loggedInUser, setLoggedInUser] = useState<AdminUser | null>(() => {
     try {
-      const saved = localStorage.getItem('ifpp_admin_logged');
-      return saved === 'true';
+      const saved = localStorage.getItem('ifpp_logged_in_user');
+      return saved ? JSON.parse(saved) : null;
     } catch (e) {
       console.warn("Storage access not available in this context", e);
-      return false;
+      return null;
     }
   });
+
+  const isAdminLoggedIn = !!loggedInUser;
 
   // 3. Central Dynamic States synchronized with Firestore online
   const [records, setRecords] = useState<TransparencyRecord[]>(initialRecords);
   const [projects, setProjects] = useState<Project[]>(initialProjects);
   const [emendas, setEmendas] = useState<Emenda[]>(initialEmendas);
+  const [users, setUsers] = useState<AdminUser[]>(initialUsers);
 
   // 4. Online Database Synchronization Effects
   useEffect(() => {
@@ -46,21 +52,30 @@ export default function App() {
     const unsubscribeProjects = syncCollection<Project>('projects', setProjects, initialProjects);
     // Sync emendas collection
     const unsubscribeEmendas = syncCollection<Emenda>('emendas', setEmendas, initialEmendas);
+    // Sync users collection
+    const unsubscribeUsers = syncCollection<AdminUser>('users', setUsers, initialUsers);
 
     return () => {
       unsubscribeRecords();
       unsubscribeProjects();
       unsubscribeEmendas();
+      unsubscribeUsers();
     };
   }, []);
 
   useEffect(() => {
     try {
-      localStorage.setItem('ifpp_admin_logged', isAdminLoggedIn ? 'true' : 'false');
+      if (loggedInUser) {
+        localStorage.setItem('ifpp_logged_in_user', JSON.stringify(loggedInUser));
+        localStorage.setItem('ifpp_admin_logged', 'true');
+      } else {
+        localStorage.removeItem('ifpp_logged_in_user');
+        localStorage.setItem('ifpp_admin_logged', 'false');
+      }
     } catch (e) {
       console.warn("Could not save admin log state to localStorage", e);
     }
-  }, [isAdminLoggedIn]);
+  }, [loggedInUser]);
 
   // 4.5. Router / Path Navigation Effect
   useEffect(() => {
@@ -118,23 +133,56 @@ export default function App() {
   }, [activeTab]);
 
   // 5. Auth Actions
-  const handleLogin = (password: string): boolean => {
-    if (password === 'admin123') {
-      setIsAdminLoggedIn(true);
+  const handleLogin = (username: string, password?: string): boolean => {
+    const foundUser = users.find(
+      u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
+    );
+    if (foundUser) {
+      setLoggedInUser(foundUser);
       return true;
     }
     return false;
   };
 
   const handleLogout = () => {
-    setIsAdminLoggedIn(false);
+    setLoggedInUser(null);
+  };
+
+  // User Management Actions
+  const handleAddUser = async (user: AdminUser) => {
+    try {
+      await saveUser(user);
+    } catch (e) {
+      console.error("Error saving user to Firestore", e);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      await removeUser(userId);
+    } catch (e) {
+      console.error("Error deleting user from Firestore", e);
+    }
+  };
+
+  const handleUpdateUser = async (user: AdminUser) => {
+    try {
+      await saveUser(user);
+      // If current user updated their own user/password, reflect changes
+      if (loggedInUser && loggedInUser.id === user.id) {
+        setLoggedInUser(user);
+      }
+    } catch (e) {
+      console.error("Error updating user in Firestore", e);
+    }
   };
 
   // 6. Record CRUD Actions
   const addRecord = async (newRecord: Omit<TransparencyRecord, 'id'>) => {
     const recordWithId: TransparencyRecord = {
       ...newRecord,
-      id: `rec-${Date.now()}`
+      id: `rec-${Date.now()}`,
+      createdByUserName: loggedInUser?.name || 'Administrador Principal'
     };
     try {
       await saveRecord(recordWithId);
@@ -152,8 +200,12 @@ export default function App() {
   };
 
   const updateRecord = async (updatedRecord: TransparencyRecord) => {
+    const recordToSave: TransparencyRecord = {
+      ...updatedRecord,
+      updatedByUserName: loggedInUser?.name || 'Administrador Principal'
+    };
     try {
-      await saveRecord(updatedRecord);
+      await saveRecord(recordToSave);
     } catch (e) {
       console.error("Error updating record in Firestore", e);
     }
@@ -169,7 +221,8 @@ export default function App() {
       .replace(/(^-|-$)+/g, '');
     const projWithId: Project = {
       ...newProject,
-      id: `proj-${slug}-${Date.now()}`
+      id: `proj-${slug}-${Date.now()}`,
+      createdByUserName: loggedInUser?.name || 'Administrador Principal'
     };
 
     try {
@@ -212,7 +265,8 @@ export default function App() {
   const addEmenda = async (newEmenda: Omit<Emenda, 'id'>) => {
     const emendaWithId: Emenda = {
       ...newEmenda,
-      id: `emenda-${Date.now()}`
+      id: `emenda-${Date.now()}`,
+      createdByUserName: loggedInUser?.name || 'Administrador Principal'
     };
 
     try {
@@ -288,6 +342,11 @@ export default function App() {
             emendas={emendas}
             addEmenda={addEmenda}
             deleteEmenda={deleteEmenda}
+            loggedInUser={loggedInUser}
+            users={users}
+            onAddUser={handleAddUser}
+            onDeleteUser={handleDeleteUser}
+            onUpdateUser={handleUpdateUser}
           />
         );
       default:

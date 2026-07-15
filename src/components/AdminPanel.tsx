@@ -1,14 +1,14 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
-import { TransparencyRecord, Project, Emenda, RecordType, ProjectType } from '../types';
+import { TransparencyRecord, Project, Emenda, RecordType, ProjectType, AdminUser } from '../types';
 import { 
   Settings, Key, Plus, Trash2, Link as LinkIcon, FileCheck, Landmark, 
   Calendar, Layers, Sparkles, CheckCircle2, RefreshCw, Info, DollarSign, ListCollapse,
-  Edit, X, AlertTriangle, FileText, UploadCloud
+  Edit, X, AlertTriangle, FileText, UploadCloud, User, Shield, Lock, Paperclip
 } from 'lucide-react';
 
 interface AdminPanelProps {
   isAdminLoggedIn: boolean;
-  onLogin: (password: string) => boolean;
+  onLogin: (username: string, password?: string) => boolean;
   onLogout: () => void;
   
   records: TransparencyRecord[];
@@ -23,6 +23,12 @@ interface AdminPanelProps {
   emendas: Emenda[];
   addEmenda: (emenda: Omit<Emenda, 'id'>) => void;
   deleteEmenda: (id: string) => void;
+
+  loggedInUser: AdminUser | null;
+  users: AdminUser[];
+  onAddUser: (user: AdminUser) => Promise<void>;
+  onDeleteUser: (id: string) => Promise<void>;
+  onUpdateUser: (user: AdminUser) => Promise<void>;
 }
 
 export default function AdminPanel({
@@ -38,15 +44,33 @@ export default function AdminPanel({
   deleteProject,
   emendas,
   addEmenda,
-  deleteEmenda
+  deleteEmenda,
+  loggedInUser,
+  users,
+  onAddUser,
+  onDeleteUser,
+  onUpdateUser
 }: AdminPanelProps) {
   
   // Login State
+  const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState(false);
 
   // Active Section Inside Admin Panel
-  const [adminSection, setAdminSection] = useState<'contas' | 'atas' | 'projetos' | 'emendas'>('contas');
+  const [adminSection, setAdminSection] = useState<'contas' | 'atas' | 'projetos' | 'emendas' | 'usuarios' | 'perfil'>('contas');
+
+  // User Management State
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState<'admin' | 'editor' | 'viewer'>('editor');
+
+  // Change Password State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newProfilePassword, setNewProfilePassword] = useState('');
+  const [confirmProfilePassword, setConfirmProfilePassword] = useState('');
+
 
   // Success Feedbacks
   const [notification, setNotification] = useState<string | null>(null);
@@ -124,35 +148,171 @@ export default function AdminPanel({
   const [projBudget, setProjBudget] = useState<string>('');
   const [projEmendaId, setProjEmendaId] = useState('');
 
+  // File states (errors and loaded file names)
+  const [contaFileError, setContaFileError] = useState<string | null>(null);
+  const [docFileError, setDocFileError] = useState<string | null>(null);
+  const [editFileError, setEditFileError] = useState<string | null>(null);
+
+  const [contaFileName, setContaFileName] = useState<string | null>(null);
+  const [docFileName, setDocFileName] = useState<string | null>(null);
+  const [editFileName, setEditFileName] = useState<string | null>(null);
+
   // Handles
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>, type: 'conta' | 'doc' | 'edit') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2.5 * 1024 * 1024) {
-      showNotification('Aviso: Arquivos com mais de 2.5MB podem ultrapassar o limite de cache do navegador. Se possível, utilize documentos compactados.');
+    const isImage = file.type.startsWith('image/');
+
+    // Check size limit: Firestore has a physical limit of 1,048,576 bytes (1MB) per document.
+    // We now compress documents automatically client-side using GZIP compression.
+    // This allows files up to 5MB to be uploaded directly since they compress heavily.
+    if (!isImage && file.size > 5 * 1024 * 1024) {
+      const errMsg = `O arquivo "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)}MB) é muito grande. O limite máximo para upload direto com compressão automática é de 5MB.\n\nPara arquivos maiores, por favor salve o arquivo no Google Drive ou Dropbox e cole o link correspondente no campo "Link Externo".`;
+      if (type === 'conta') {
+        setContaFileError(errMsg);
+        setContaFileUrl('');
+        setContaFileName(null);
+      } else if (type === 'doc') {
+        setDocFileError(errMsg);
+        setDocFileUrl('');
+        setDocFileName(null);
+      } else if (type === 'edit') {
+        setEditFileError(errMsg);
+        setEditFileUrl('');
+        setEditFileName(null);
+      }
+      alert(errMsg);
+      return;
     }
 
-    showNotification(`Lendo arquivo "${file.name}"...`);
+    // Set initial file info and clear old errors
+    if (type === 'conta') {
+      setContaFileError(null);
+      setContaFileName(file.name);
+    } else if (type === 'doc') {
+      setDocFileError(null);
+      setDocFileName(file.name);
+    } else if (type === 'edit') {
+      setEditFileError(null);
+      setEditFileName(file.name);
+    }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      if (type === 'conta') {
-        setContaFileUrl(base64);
+    showNotification(`Processando arquivo "${file.name}"...`);
+
+    if (isImage) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Max dimension to keep file size reasonable
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Compress with progressive quality reduction to be under 600KB
+            let quality = 0.75;
+            let dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+            while (dataUrl.length > 600 * 1024 && quality > 0.15) {
+              quality -= 0.1;
+              dataUrl = canvas.toDataURL('image/jpeg', quality);
+            }
+
+            if (type === 'conta') {
+              setContaFileUrl(dataUrl);
+            } else if (type === 'doc') {
+              setDocFileUrl(dataUrl);
+            } else if (type === 'edit') {
+              setEditFileUrl(dataUrl);
+            }
+            showNotification(`Imagem "${file.name}" comprimida e carregada com sucesso!`);
+          } else {
+            const rawBase64 = event.target?.result as string;
+            if (rawBase64.length > 6.5 * 1024 * 1024) {
+              const errMsg = `A imagem "${file.name}" é muito grande (excede o limite de 5MB). Por favor, reduza o tamanho ou selecione uma imagem menor.`;
+              if (type === 'conta') {
+                setContaFileError(errMsg);
+                setContaFileUrl('');
+                setContaFileName(null);
+              } else if (type === 'doc') {
+                setDocFileError(errMsg);
+                setDocFileUrl('');
+                setDocFileName(null);
+              } else if (type === 'edit') {
+                setEditFileError(errMsg);
+                setEditFileUrl('');
+                setEditFileName(null);
+              }
+              alert(errMsg);
+              return;
+            }
+            if (type === 'conta') setContaFileUrl(rawBase64);
+            else if (type === 'doc') setDocFileUrl(rawBase64);
+            else if (type === 'edit') setEditFileUrl(rawBase64);
+            showNotification(`Imagem "${file.name}" carregada com sucesso!`);
+          }
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    } else {
+      showNotification(`Processando documento "${file.name}"...`);
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        if (base64.length > 6.5 * 1024 * 1024) {
+          const errMsg = `O arquivo "${file.name}" é muito grande (${(file.size / (1024 * 1024)).toFixed(1)}MB). O limite para upload direto é de 5MB. Por favor, utilize um link externo do Google Drive para este arquivo.`;
+          if (type === 'conta') {
+            setContaFileError(errMsg);
+            setContaFileUrl('');
+            setContaFileName(null);
+          } else if (type === 'doc') {
+            setDocFileError(errMsg);
+            setDocFileUrl('');
+            setDocFileName(null);
+          } else if (type === 'edit') {
+            setEditFileError(errMsg);
+            setEditFileUrl('');
+            setEditFileName(null);
+          }
+          alert(errMsg);
+          return;
+        }
+        if (type === 'conta') setContaFileUrl(base64);
+        else if (type === 'doc') setDocFileUrl(base64);
+        else if (type === 'edit') setEditFileUrl(base64);
         showNotification(`Arquivo "${file.name}" carregado com sucesso!`);
-      } else if (type === 'doc') {
-        setDocFileUrl(base64);
-        showNotification(`Arquivo "${file.name}" carregado com sucesso!`);
-      } else if (type === 'edit') {
-        setEditFileUrl(base64);
-        showNotification(`Arquivo "${file.name}" carregado com sucesso!`);
-      }
-    };
-    reader.onerror = () => {
-      showNotification('Erro ao carregar o arquivo do computador.');
-    };
-    reader.readAsDataURL(file);
+      };
+      reader.onerror = () => {
+        console.error("Erro na leitura do arquivo:", reader.error);
+        alert("Não foi possível carregar o arquivo.");
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleStartEdit = (record: TransparencyRecord) => {
@@ -172,6 +332,8 @@ export default function AdminPanel({
     setEditCategory(record.category || 'despesa');
     setEditProjectLinked(record.projectLinked || '');
     setEditFundingSource(record.fundingSource || '');
+    setEditFileError(null);
+    setEditFileName(record.fileUrl && record.fileUrl !== '#' ? 'Documento anexo existente' : null);
   };
 
   const handleSaveEdit = (e: FormEvent) => {
@@ -198,18 +360,75 @@ export default function AdminPanel({
 
     updateRecord(updated);
     setEditingRecord(null);
+    setEditFileError(null);
+    setEditFileName(null);
     showNotification('Documento atualizado com sucesso!');
   };
 
   const handleLoginSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const success = onLogin(passwordInput);
+    if (!usernameInput.trim()) {
+      showNotification('O usuário de login é obrigatório.');
+      return;
+    }
+    const success = onLogin(usernameInput, passwordInput);
     if (success) {
       setLoginError(false);
       setPasswordInput('');
+      setUsernameInput('');
     } else {
       setLoginError(true);
     }
+  };
+
+  const handleCreateUser = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newUsername.trim() || !newPassword.trim() || !newName.trim()) {
+      showNotification('Todos os campos de usuário são obrigatórios.');
+      return;
+    }
+    // Check if user already exists
+    if (users.some(u => u.username.toLowerCase() === newUsername.toLowerCase())) {
+      showNotification('Este nome de usuário já está cadastrado.');
+      return;
+    }
+    await onAddUser({
+      id: newUsername.trim().toLowerCase(),
+      username: newUsername.trim().toLowerCase(),
+      password: newPassword,
+      name: newName.trim(),
+      role: newRole
+    });
+    setNewUsername('');
+    setNewPassword('');
+    setNewName('');
+    setNewRole('editor');
+    showNotification('Novo usuário cadastrado com sucesso!');
+  };
+
+  const handleChangePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!loggedInUser) return;
+    if (currentPassword !== loggedInUser.password) {
+      showNotification('A senha atual inserida está incorreta.');
+      return;
+    }
+    if (newProfilePassword !== confirmProfilePassword) {
+      showNotification('A nova senha e a confirmação não conferem.');
+      return;
+    }
+    if (newProfilePassword.length < 4) {
+      showNotification('A nova senha deve ter pelo menos 4 caracteres.');
+      return;
+    }
+    await onUpdateUser({
+      ...loggedInUser,
+      password: newProfilePassword
+    });
+    setCurrentPassword('');
+    setNewProfilePassword('');
+    setConfirmProfilePassword('');
+    showNotification('Sua senha foi alterada com sucesso!');
   };
 
   const handleCreateConta = (e: FormEvent) => {
@@ -240,6 +459,8 @@ export default function AdminPanel({
     setContaProjectLinked('');
     setContaFundingSource('');
     setContaFileUrl('');
+    setContaFileError(null);
+    setContaFileName(null);
     showNotification('Prestação de contas registrada com sucesso!');
   };
 
@@ -263,6 +484,8 @@ export default function AdminPanel({
     setDocDate('');
     setDocDescription('');
     setDocFileUrl('');
+    setDocFileError(null);
+    setDocFileName(null);
     showNotification('Documento / ATA registrado com sucesso!');
   };
 
@@ -328,26 +551,37 @@ export default function AdminPanel({
               <Settings className="w-6 h-6 animate-spin-slow" />
             </div>
             <h2 className="text-lg sm:text-2xl font-extrabold text-indigo-950 tracking-tight">Painel de Administração IFPP</h2>
-            <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-              Área de governança para atualização de Balanços, ATAs, Estatuto e Destinação de Verbas Parlamentares.
-            </p>
           </div>
 
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Chave de Segurança Administrador</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Usuário</label>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+                <input
+                  type="text"
+                  placeholder="Nome de usuário"
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                  className="w-full text-sm pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 font-sans"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Chave de Segurança</label>
               <div className="relative">
                 <Key className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
                 <input
                   type="password"
-                  placeholder="Digite a senha (padrão: admin123)"
+                  placeholder="Digite sua senha"
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
                   className="w-full text-sm pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 font-mono"
                 />
               </div>
               {loginError && (
-                <p className="text-xs text-rose-500 font-medium mt-1.5">Senha incorreta. Use a senha de demonstração "admin123".</p>
+                <p className="text-xs text-rose-500 font-medium mt-1.5">Usuário ou senha incorretos. Por favor, tente novamente.</p>
               )}
             </div>
 
@@ -358,13 +592,6 @@ export default function AdminPanel({
               Autenticar Acesso
             </button>
           </form>
-
-          <div className="pt-4 border-t border-slate-100 flex items-start gap-2.5 text-xs text-slate-500">
-            <Info className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
-            <p>
-              Nota: Para agilizar a avaliação desta entrega, a senha foi configurada como <strong className="font-mono text-slate-700">admin123</strong>. Todos os dados adicionados aqui persistirão em tempo de execução via armazenamento local do navegador.
-            </p>
-          </div>
         </div>
       </div>
     );
@@ -379,7 +606,7 @@ export default function AdminPanel({
           <div>
             <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 uppercase">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              Sessão Administrativa Ativa
+              Sessão Ativa: {loggedInUser?.name} ({loggedInUser?.role === 'admin' ? 'Administrador' : loggedInUser?.role === 'editor' ? 'Editor' : 'Visualizador'})
             </div>
             <h1 className="text-xl sm:text-3xl font-extrabold text-indigo-950 tracking-tight mt-1">
               Painel de Governança e Lançamentos
@@ -446,6 +673,31 @@ export default function AdminPanel({
               <Layers className="w-4 h-4" />
               Projetos, Cursos & Eventos ({projects.length})
             </button>
+
+            <div className="h-px bg-slate-100 my-2"></div>
+            <h3 className="text-xs font-bold text-slate-400 uppercase px-3 py-1">Minha Conta</h3>
+
+            <button
+              onClick={() => setAdminSection('perfil')}
+              className={`w-full text-left px-4 py-3 rounded-lg text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer ${
+                adminSection === 'perfil' ? 'bg-indigo-900 text-white' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Lock className="w-4 h-4" />
+              Alterar Minha Senha
+            </button>
+
+            {loggedInUser?.role === 'admin' && (
+              <button
+                onClick={() => setAdminSection('usuarios')}
+                className={`w-full text-left px-4 py-3 rounded-lg text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer ${
+                  adminSection === 'usuarios' ? 'bg-indigo-900 text-white' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <User className="w-4 h-4" />
+                Gerenciar Usuários ({users.length})
+              </button>
+            )}
           </div>
 
           <div className="lg:col-span-9 space-y-8">
@@ -457,7 +709,18 @@ export default function AdminPanel({
               <div className="space-y-6">
                 
                 {/* Form to insert Accounts */}
-                <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+                {loggedInUser?.role === 'viewer' ? (
+                  <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl flex items-start gap-3.5 text-amber-800 shadow-sm">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900 font-sans">Acesso Somente Consulta</h4>
+                      <p className="text-xs text-slate-600 mt-1 leading-relaxed font-sans">
+                        Sua conta tem nível de acesso de <strong>Visualizador</strong>. Você pode consultar todos os lançamentos financeiros, relatórios e históricos de auditoria, mas as permissões para criar, editar ou excluir registros estão desabilitadas.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-sm space-y-6">
                   <div className="border-b border-slate-100 pb-4">
                     <h3 className="text-lg font-bold text-indigo-950">Lançar Novo Balancete ou Prestação de Contas</h3>
                     <p className="text-xs text-slate-500 mt-1">Insira os dados financeiros oficiais de receitas, despesas ou aportes específicos.</p>
@@ -566,7 +829,7 @@ export default function AdminPanel({
                         <FileCheck className="w-3.5 h-3.5 text-indigo-500" />
                         Arquivo de Prestação de Contas / PDF (Upload do Computador)
                       </label>
-                      <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-xl p-4 bg-slate-50 transition-colors relative flex flex-col items-center justify-center text-center group">
+                      <div className={`border-2 border-dashed ${contaFileError ? 'border-red-300 bg-red-50' : 'border-slate-200 hover:border-indigo-400 bg-slate-50'} rounded-xl p-4 transition-colors relative flex flex-col items-center justify-center text-center group`}>
                         <input
                           type="file"
                           accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.xlsx,.xls"
@@ -575,25 +838,54 @@ export default function AdminPanel({
                         />
                         <div className="flex flex-col items-center gap-2">
                           <div className="p-3 bg-white rounded-full shadow-xs group-hover:text-indigo-600 transition-colors">
-                            <UploadCloud className="w-6 h-6 text-slate-400 group-hover:text-indigo-600" />
+                            <UploadCloud className={`w-6 h-6 ${contaFileError ? 'text-red-400' : 'text-slate-400 group-hover:text-indigo-600'}`} />
                           </div>
-                          {contaFileUrl && contaFileUrl !== '#' ? (
-                            <div className="text-slate-700">
+                          {contaFileError ? (
+                            <div className="text-red-700 px-4">
+                              <p className="text-xs font-bold flex items-center gap-1 justify-center">
+                                ⚠️ Arquivo rejeitado!
+                              </p>
+                              <p className="text-[10px] text-red-600 mt-1 max-w-sm leading-tight">
+                                {contaFileError}
+                              </p>
+                            </div>
+                          ) : contaFileName ? (
+                            <div className="text-slate-700 px-4">
                               <p className="text-xs font-semibold text-emerald-600 flex items-center gap-1 justify-center">
                                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                Arquivo Carregado!
+                                Arquivo pronto: {contaFileName}
                               </p>
-                              <p className="text-[10px] text-slate-400 mt-0.5 font-mono max-w-xs truncate">
-                                {contaFileUrl.startsWith('data:') ? 'Arquivo PDF/Documento carregado no sistema' : contaFileUrl}
+                              <p className="text-[10px] text-slate-400 mt-0.5 font-mono max-w-xs truncate text-center">
+                                O documento foi carregado e está pronto para salvar.
+                              </p>
+                            </div>
+                          ) : contaFileUrl && contaFileUrl !== '#' ? (
+                            <div className="text-slate-700 px-4">
+                              <p className="text-xs font-semibold text-emerald-600 flex items-center gap-1 justify-center">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                Link Externo Vinculado!
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-0.5 font-mono max-w-xs truncate text-center">
+                                {contaFileUrl}
                               </p>
                             </div>
                           ) : (
                             <div>
                               <p className="text-xs font-semibold text-slate-700">Arraste ou clique para selecionar do computador</p>
-                              <p className="text-[10px] text-slate-400 mt-0.5">Suporta PDF, Word, Excel, Imagens (Máx: 2MB)</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">Suporta PDF, Word, Excel, Imagens (Máx: 5MB com compactação automática)</p>
                             </div>
                           )}
                         </div>
+                      </div>
+                      <div className="mt-2 text-left">
+                        <span className="text-xs text-slate-400 block mb-1">Ou informe um link externo do documento (Google Drive, Dropbox, etc):</span>
+                        <input
+                          type="url"
+                          placeholder="https://drive.google.com/..."
+                          value={contaFileUrl && !contaFileUrl.startsWith('data:') && !contaFileUrl.startsWith('chunked|') && contaFileUrl !== '#' ? contaFileUrl : ''}
+                          onChange={(e) => setContaFileUrl(e.target.value)}
+                          className="w-full p-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                        />
                       </div>
                     </div>
 
@@ -619,6 +911,7 @@ export default function AdminPanel({
 
                   </form>
                 </div>
+                )}
 
                 {/* List of accounts with delete capability */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
@@ -642,8 +935,20 @@ export default function AdminPanel({
                           return (
                             <tr key={record.id} className="hover:bg-slate-50 transition-colors">
                               <td className="px-4 py-3.5">
-                                <span className="block font-semibold text-slate-900">{record.title}</span>
-                                <span className="block text-[10px] text-slate-400 mt-0.5">{record.date} • Exercício {record.year}</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-semibold text-slate-900">{record.title}</span>
+                                  {record.fileUrl && record.fileUrl !== '#' && (
+                                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-emerald-50 text-emerald-700 text-[8px] font-bold rounded border border-emerald-100" title={(record.fileUrl.startsWith('data:') || record.fileUrl.startsWith('chunked|')) ? 'Arquivo em anexo (Base64)' : 'Link externo cadastrado'}>
+                                      <Paperclip className="w-2.5 h-2.5 text-emerald-600" />
+                                      {(record.fileUrl.startsWith('data:') || record.fileUrl.startsWith('chunked|')) ? 'ANEXO PDF' : 'LINK'}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="block text-[10px] text-slate-400 mt-0.5">
+                                  {record.date} • Exercício {record.year}
+                                  {record.createdByUserName && ` • Criado por: ${record.createdByUserName}`}
+                                  {record.updatedByUserName && ` • Alterado por: ${record.updatedByUserName}`}
+                                </span>
                               </td>
                               <td className="px-4 py-3.5">
                                 {record.category === 'despesa' ? (
@@ -668,32 +973,36 @@ export default function AdminPanel({
                                 )}
                               </td>
                               <td className="px-4 py-3.5 text-center">
-                                <div className="flex justify-center items-center gap-1.5">
-                                  <button
-                                    onClick={() => handleStartEdit(record)}
-                                    className="p-1.5 rounded text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
-                                    title="Editar Lançamento"
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setDeleteConfirm({
-                                        id: record.id,
-                                        title: record.title,
-                                        type: 'record',
-                                        onConfirm: () => {
-                                          deleteRecord(record.id);
-                                          showNotification('Registro financeiro excluído.');
-                                        }
-                                      });
-                                    }}
-                                    className="p-1.5 rounded text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
-                                    title="Deletar Lançamento"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
+                                {loggedInUser?.role !== 'viewer' ? (
+                                  <div className="flex justify-center items-center gap-1.5">
+                                    <button
+                                      onClick={() => handleStartEdit(record)}
+                                      className="p-1.5 rounded text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                      title="Editar Lançamento"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setDeleteConfirm({
+                                          id: record.id,
+                                          title: record.title,
+                                          type: 'record',
+                                          onConfirm: () => {
+                                            deleteRecord(record.id);
+                                            showNotification('Registro financeiro excluído.');
+                                          }
+                                        });
+                                      }}
+                                      className="p-1.5 rounded text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
+                                      title="Deletar Lançamento"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 font-medium italic">Sem permissão</span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -712,9 +1021,20 @@ export default function AdminPanel({
             {adminSection === 'atas' && (
               <div className="space-y-6">
                 
-                <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-sm space-y-6">
-                  <div className="border-b border-slate-100 pb-4">
-                    <h3 className="text-lg font-bold text-indigo-950">Registrar ATA de Reunião ou Atualizar Estatuto</h3>
+                {loggedInUser?.role === 'viewer' ? (
+                  <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl flex items-start gap-3.5 text-amber-800 shadow-sm">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900 font-sans">Acesso Somente Consulta</h4>
+                      <p className="text-xs text-slate-600 mt-1 leading-relaxed font-sans">
+                        Sua conta tem nível de acesso de <strong>Visualizador</strong>. Você pode consultar todas as ATAs, estatutos, balancetes e históricos de auditoria, mas as permissões para criar, editar ou excluir registros estão desabilitadas.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+                    <div className="border-b border-slate-100 pb-4">
+                      <h3 className="text-lg font-bold text-indigo-950">Registrar ATA de Reunião ou Atualizar Estatuto</h3>
                     <p className="text-xs text-slate-500 mt-1">Controle formal de assembleias da diretoria executiva e pareceres fiscais do IFPP.</p>
                   </div>
 
@@ -771,7 +1091,7 @@ export default function AdminPanel({
                         <FileCheck className="w-3.5 h-3.5 text-indigo-500" />
                         Arquivo do Documento / ATA (Upload do Computador)
                       </label>
-                      <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-xl p-4 bg-slate-50 transition-colors relative flex flex-col items-center justify-center text-center group">
+                      <div className={`border-2 border-dashed ${docFileError ? 'border-red-300 bg-red-50' : 'border-slate-200 hover:border-indigo-400 bg-slate-50'} rounded-xl p-4 transition-colors relative flex flex-col items-center justify-center text-center group`}>
                         <input
                           type="file"
                           accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.xlsx,.xls"
@@ -780,25 +1100,54 @@ export default function AdminPanel({
                         />
                         <div className="flex flex-col items-center gap-2">
                           <div className="p-3 bg-white rounded-full shadow-xs group-hover:text-indigo-600 transition-colors">
-                            <UploadCloud className="w-6 h-6 text-slate-400 group-hover:text-indigo-600" />
+                            <UploadCloud className={`w-6 h-6 ${docFileError ? 'text-red-400' : 'text-slate-400 group-hover:text-indigo-600'}`} />
                           </div>
-                          {docFileUrl && docFileUrl !== '#' ? (
-                            <div className="text-slate-700">
+                          {docFileError ? (
+                            <div className="text-red-700 px-4">
+                              <p className="text-xs font-bold flex items-center gap-1 justify-center">
+                                ⚠️ Arquivo rejeitado!
+                              </p>
+                              <p className="text-[10px] text-red-600 mt-1 max-w-sm leading-tight">
+                                {docFileError}
+                              </p>
+                            </div>
+                          ) : docFileName ? (
+                            <div className="text-slate-700 px-4">
                               <p className="text-xs font-semibold text-emerald-600 flex items-center gap-1 justify-center">
                                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                Arquivo Carregado!
+                                Arquivo pronto: {docFileName}
                               </p>
-                              <p className="text-[10px] text-slate-400 mt-0.5 font-mono max-w-xs truncate">
-                                {docFileUrl.startsWith('data:') ? 'Arquivo PDF/Documento carregado no sistema' : docFileUrl}
+                              <p className="text-[10px] text-slate-400 mt-0.5 font-mono max-w-xs truncate text-center">
+                                O documento foi carregado e está pronto para salvar.
+                              </p>
+                            </div>
+                          ) : docFileUrl && docFileUrl !== '#' ? (
+                            <div className="text-slate-700 px-4">
+                              <p className="text-xs font-semibold text-emerald-600 flex items-center gap-1 justify-center">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                Link Externo Vinculado!
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-0.5 font-mono max-w-xs truncate text-center">
+                                {docFileUrl}
                               </p>
                             </div>
                           ) : (
                             <div>
                               <p className="text-xs font-semibold text-slate-700">Arraste ou clique para selecionar do computador</p>
-                              <p className="text-[10px] text-slate-400 mt-0.5">Suporta PDF, Word, Excel, Imagens (Máx: 2MB)</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">Suporta PDF, Word, Excel, Imagens (Máx: 5MB com compactação automática)</p>
                             </div>
                           )}
                         </div>
+                      </div>
+                      <div className="mt-2 text-left">
+                        <span className="text-xs text-slate-400 block mb-1">Ou informe um link externo do documento (Google Drive, Dropbox, etc):</span>
+                        <input
+                          type="url"
+                          placeholder="https://drive.google.com/..."
+                          value={docFileUrl && !docFileUrl.startsWith('data:') && !docFileUrl.startsWith('chunked|') && docFileUrl !== '#' ? docFileUrl : ''}
+                          onChange={(e) => setDocFileUrl(e.target.value)}
+                          className="w-full p-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                        />
                       </div>
                     </div>
 
@@ -824,6 +1173,7 @@ export default function AdminPanel({
 
                   </form>
                 </div>
+                )}
 
                 {/* List of documents */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
@@ -837,36 +1187,50 @@ export default function AdminPanel({
                           }`}>
                             {doc.type.toUpperCase()}
                           </span>
-                          <h4 className="font-bold text-indigo-950 text-xs sm:text-sm">{doc.title}</h4>
-                          <p className="text-[10px] text-slate-400 font-mono mt-1">Registrado em: {doc.date} • Ref: {doc.year}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-bold text-indigo-950 text-xs sm:text-sm">{doc.title}</h4>
+                            {doc.fileUrl && doc.fileUrl !== '#' && (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-emerald-50 text-emerald-700 text-[8px] font-bold rounded border border-emerald-100 shrink-0" title={(doc.fileUrl.startsWith('data:') || doc.fileUrl.startsWith('chunked|')) ? 'Arquivo em anexo (Base64)' : 'Link externo cadastrado'}>
+                                <Paperclip className="w-2.5 h-2.5 text-emerald-600" />
+                                {(doc.fileUrl.startsWith('data:') || doc.fileUrl.startsWith('chunked|')) ? 'PDF' : 'LINK'}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 font-mono mt-1">
+                            Registrado em: {doc.date} • Ref: {doc.year}
+                            {doc.createdByUserName && ` • Criado por: ${doc.createdByUserName}`}
+                            {doc.updatedByUserName && ` • Alterado por: ${doc.updatedByUserName}`}
+                          </p>
                           <p className="text-xs text-slate-500 mt-2 line-clamp-2">{doc.description}</p>
                         </div>
-                        <div className="flex items-center gap-1 ml-2 shrink-0">
-                          <button
-                            onClick={() => handleStartEdit(doc)}
-                            className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
-                            title="Editar Documento"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeleteConfirm({
-                                id: doc.id,
-                                title: doc.title,
-                                type: 'record',
-                                onConfirm: () => {
-                                  deleteRecord(doc.id);
-                                  showNotification('Documento social excluído.');
-                                }
-                              });
-                            }}
-                            className="p-1 text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                            title="Excluir Documento"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        {loggedInUser?.role !== 'viewer' && (
+                          <div className="flex items-center gap-1 ml-2 shrink-0">
+                            <button
+                              onClick={() => handleStartEdit(doc)}
+                              className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                              title="Editar Documento"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDeleteConfirm({
+                                  id: doc.id,
+                                  title: doc.title,
+                                  type: 'record',
+                                  onConfirm: () => {
+                                    deleteRecord(doc.id);
+                                    showNotification('Documento social excluído.');
+                                  }
+                                });
+                              }}
+                              className="p-1 text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                              title="Excluir Documento"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -881,9 +1245,20 @@ export default function AdminPanel({
             {adminSection === 'emendas' && (
               <div className="space-y-6">
                 
-                <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-sm space-y-6">
-                  <div className="border-b border-slate-100 pb-4">
-                    <h3 className="text-lg font-bold text-indigo-950">Cadastrar Nova Emenda Parlamentar</h3>
+                {loggedInUser?.role === 'viewer' ? (
+                  <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl flex items-start gap-3.5 text-amber-800 shadow-sm">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900 font-sans">Acesso Somente Consulta</h4>
+                      <p className="text-xs text-slate-600 mt-1 leading-relaxed font-sans">
+                        Sua conta tem nível de acesso de <strong>Visualizador</strong>. Você pode consultar todas as emendas parlamentares, destinações e históricos de auditoria, mas as permissões para criar, editar ou excluir registros estão desabilitadas.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+                    <div className="border-b border-slate-100 pb-4">
+                      <h3 className="text-lg font-bold text-indigo-950">Cadastrar Nova Emenda Parlamentar</h3>
                     <p className="text-xs text-slate-500 mt-1">Cadastre as verbas oficiais aprovadas para o IFPP e vincule-as a cursos e oficinas.</p>
                   </div>
 
@@ -975,6 +1350,7 @@ export default function AdminPanel({
 
                   </form>
                 </div>
+                )}
 
                 {/* List of emendas */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
@@ -997,7 +1373,10 @@ export default function AdminPanel({
                             <tr key={e.id} className="hover:bg-slate-50 transition-colors">
                               <td className="px-4 py-3.5 font-mono font-bold text-indigo-950">
                                 {e.code}
-                                <span className="block text-[9px] text-slate-400 font-normal">Exercício {e.year}</span>
+                                <span className="block text-[9px] text-slate-400 font-normal">
+                                  Exercício {e.year}
+                                  {e.createdByUserName && ` • Criado por: ${e.createdByUserName}`}
+                                </span>
                               </td>
                               <td className="px-4 py-3.5 font-medium">{e.author}</td>
                               <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-700">
@@ -1013,23 +1392,27 @@ export default function AdminPanel({
                                 )}
                               </td>
                               <td className="px-4 py-3.5 text-center">
-                                <button
-                                  onClick={() => {
-                                    setDeleteConfirm({
-                                      id: e.id,
-                                      title: e.code,
-                                      type: 'emenda',
-                                      onConfirm: () => {
-                                        deleteEmenda(e.id);
-                                        showNotification('Emenda excluída do sistema.');
-                                      }
-                                    });
-                                  }}
-                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                                  title="Excluir Emenda"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                {loggedInUser?.role !== 'viewer' ? (
+                                  <button
+                                    onClick={() => {
+                                      setDeleteConfirm({
+                                        id: e.id,
+                                        title: e.code,
+                                        type: 'emenda',
+                                        onConfirm: () => {
+                                          deleteEmenda(e.id);
+                                          showNotification('Emenda excluída do sistema.');
+                                        }
+                                      });
+                                    }}
+                                    className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                    title="Excluir Emenda"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 font-medium italic">Sem permissão</span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -1048,9 +1431,20 @@ export default function AdminPanel({
             {adminSection === 'projetos' && (
               <div className="space-y-6">
                 
-                <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-sm space-y-6">
-                  <div className="border-b border-slate-100 pb-4">
-                    <h3 className="text-lg font-bold text-indigo-950">Cadastrar Novo Projeto, Curso ou Evento</h3>
+                {loggedInUser?.role === 'viewer' ? (
+                  <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl flex items-start gap-3.5 text-amber-800 shadow-sm">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900 font-sans">Acesso Somente Consulta</h4>
+                      <p className="text-xs text-slate-600 mt-1 leading-relaxed font-sans">
+                        Sua conta tem nível de acesso de <strong>Visualizador</strong>. Você pode consultar todas as iniciativas, cursos, oficinas, estatutos, balancetes e históricos de auditoria, mas as permissões para criar, editar ou excluir registros estão desabilitadas.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+                    <div className="border-b border-slate-100 pb-4">
+                      <h3 className="text-lg font-bold text-indigo-950">Cadastrar Novo Projeto, Curso ou Evento</h3>
                     <p className="text-xs text-slate-500 mt-1">Crie as fichas que detalham oficinas, seminários e ações comunitárias do IFPP.</p>
                   </div>
 
@@ -1176,6 +1570,7 @@ export default function AdminPanel({
 
                   </form>
                 </div>
+                )}
 
                 {/* List of projects */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
@@ -1198,7 +1593,10 @@ export default function AdminPanel({
                               </span>
                             </div>
                             <h4 className="font-bold text-slate-900 text-xs sm:text-sm mt-1.5">{p.title}</h4>
-                            <p className="text-[10px] text-slate-400 mt-1">Ano: {p.year} • {p.location || 'Sem local'}</p>
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              Ano: {p.year} • {p.location || 'Sem local'}
+                              {p.createdByUserName && ` • Criado por: ${p.createdByUserName}`}
+                            </p>
                             
                             {fund && (
                               <p className="text-[10px] font-mono text-indigo-900 font-bold mt-1.5">
@@ -1206,27 +1604,230 @@ export default function AdminPanel({
                               </p>
                             )}
                           </div>
-                          <button
-                            onClick={() => {
-                              setDeleteConfirm({
-                                id: p.id,
-                                title: p.title,
-                                type: 'project',
-                                onConfirm: () => {
-                                  deleteProject(p.id);
-                                  showNotification('Iniciativa excluída do sistema.');
-                                }
-                              });
-                            }}
-                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                            title="Excluir Iniciativa"
-                          >
-                            <Trash2 className="w-4.5 h-4.5" />
-                          </button>
+                          {loggedInUser?.role !== 'viewer' && (
+                            <button
+                              onClick={() => {
+                                setDeleteConfirm({
+                                  id: p.id,
+                                  title: p.title,
+                                  type: 'project',
+                                  onConfirm: () => {
+                                    deleteProject(p.id);
+                                    showNotification('Iniciativa excluída do sistema.');
+                                  }
+                                });
+                              }}
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                              title="Excluir Iniciativa"
+                            >
+                              <Trash2 className="w-4.5 h-4.5" />
+                            </button>
+                          )}
                         </div>
                       );
                     })}
                   </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* ========================================================
+                SECTION 5: GERENCIAR USUÁRIOS
+                ======================================================== */}
+            {adminSection === 'usuarios' && loggedInUser?.role === 'admin' && (
+              <div className="space-y-6">
+                
+                {/* Form to insert user */}
+                <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+                  <div className="border-b border-slate-100 pb-4">
+                    <h3 className="text-lg font-bold text-indigo-950">Criar Novo Usuário</h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Adicione novos membros com credenciais exclusivas e defina seus níveis de privilégio no sistema.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5 font-sans">Nome do Usuário *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: João Silva"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5 font-sans">Login de Acesso *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: joao.silva (letras minúsculas)"
+                        value={newUsername}
+                        onChange={(e) => setNewUsername(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5 font-sans">Senha do Usuário *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Mínimo 4 caracteres"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5 font-sans">Nível de Permissão *</label>
+                      <select
+                        value={newRole}
+                        onChange={(e) => setNewRole(e.target.value as 'admin' | 'editor' | 'viewer')}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm"
+                      >
+                        <option value="editor">Editor (Pode criar e alterar documentos)</option>
+                        <option value="viewer">Visualizador (Somente consulta ao painel)</option>
+                        <option value="admin">Administrador (Acesso total + Gerenciamento de Usuários)</option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-2 pt-4">
+                      <button
+                        type="submit"
+                        className="w-full sm:w-auto px-6 py-3 bg-indigo-900 hover:bg-indigo-950 text-white font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        Criar Conta de Acesso
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* List of existing users */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                  <h3 className="text-base font-bold text-slate-900 mb-4 font-sans">Usuários Cadastrados no Painel</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-600">
+                      <thead className="bg-slate-50 text-slate-400 font-bold uppercase border-b border-slate-100">
+                        <tr>
+                          <th className="px-4 py-3">Nome Completo</th>
+                          <th className="px-4 py-3">Usuário / Login</th>
+                          <th className="px-4 py-3">Perfil / Acesso</th>
+                          <th className="px-4 py-3 text-center">Excluir</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {users.map((u) => (
+                          <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3.5 font-semibold text-slate-950">{u.name}</td>
+                            <td className="px-4 py-3.5 font-mono text-slate-500">{u.username}</td>
+                            <td className="px-4 py-3.5">
+                              <span className={`px-2 py-0.5 text-[10px] font-bold rounded capitalize ${
+                                u.role === 'admin' ? 'bg-red-50 text-red-700 border border-red-100' :
+                                u.role === 'editor' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                                'bg-slate-50 text-slate-600 border border-slate-100'
+                              }`}>
+                                {u.role === 'admin' ? 'Administrador' : u.role === 'editor' ? 'Editor' : 'Visualizador'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              {u.username === 'admin' ? (
+                                <span className="text-[10px] text-slate-400 font-medium italic">Inexcluível</span>
+                              ) : (
+                                <button
+                                  onClick={async () => {
+                                    setDeleteConfirm({
+                                      id: u.id,
+                                      title: u.name,
+                                      type: 'user',
+                                      onConfirm: async () => {
+                                        await onDeleteUser(u.id);
+                                        showNotification('Usuário excluído com sucesso.');
+                                      }
+                                    });
+                                  }}
+                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                  title="Remover Usuário"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* ========================================================
+                SECTION 6: ALTERAR MINHA SENHA
+                ======================================================== */}
+            {adminSection === 'perfil' && (
+              <div className="space-y-6">
+                
+                <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+                  <div className="border-b border-slate-100 pb-4">
+                    <h3 className="text-lg font-bold text-indigo-950 font-sans">Alterar Minha Senha</h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Mantenha suas credenciais seguras atualizando sua chave de acesso periodicamente.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleChangePassword} className="max-w-md space-y-4 text-xs">
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5 font-sans">Senha Atual *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Sua senha de login atual"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5 font-sans">Nova Senha *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Mínimo de 4 caracteres"
+                        value={newProfilePassword}
+                        onChange={(e) => setNewProfilePassword(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5 font-sans">Confirmar Nova Senha *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="Digite a nova senha novamente"
+                        value={confirmProfilePassword}
+                        onChange={(e) => setConfirmProfilePassword(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
+                      />
+                    </div>
+
+                    <div className="pt-4">
+                      <button
+                        type="submit"
+                        className="px-6 py-3 bg-indigo-900 hover:bg-indigo-950 text-white font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        Salvar Nova Senha
+                      </button>
+                    </div>
+                  </form>
                 </div>
 
               </div>
@@ -1355,7 +1956,7 @@ export default function AdminPanel({
                     <FileCheck className="w-3.5 h-3.5 text-indigo-500" />
                     Upload de Novo Arquivo (do Computador)
                   </label>
-                  <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-xl p-3 bg-slate-50 transition-colors relative flex flex-col items-center justify-center text-center group">
+                  <div className={`border-2 border-dashed ${editFileError ? 'border-red-300 bg-red-50' : 'border-slate-200 hover:border-indigo-400 bg-slate-50'} rounded-xl p-3 transition-colors relative flex flex-col items-center justify-center text-center group`}>
                     <input
                       type="file"
                       accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.xlsx,.xls"
@@ -1363,24 +1964,53 @@ export default function AdminPanel({
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                     />
                     <div className="flex flex-col items-center gap-1.5">
-                      <UploadCloud className="w-5 h-5 text-slate-400 group-hover:text-indigo-600 transition-colors" />
-                      {editFileUrl && editFileUrl !== '#' ? (
-                        <div className="text-slate-700">
-                          <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1 justify-center">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                            Arquivo Pronto!
+                      <UploadCloud className={`w-5 h-5 ${editFileError ? 'text-red-400' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}`} />
+                      {editFileError ? (
+                        <div className="text-red-700 px-2">
+                          <p className="text-[10px] font-bold flex items-center gap-1 justify-center">
+                            ⚠️ Rejeitado
                           </p>
-                          <p className="text-[8px] text-slate-400 max-w-[180px] truncate">
-                            {editFileUrl.startsWith('data:') ? 'Arquivo carregado' : editFileUrl}
+                          <p className="text-[8px] text-red-500 mt-0.5 max-w-[180px] leading-tight">
+                            {editFileError}
+                          </p>
+                        </div>
+                      ) : editFileName ? (
+                        <div className="text-slate-700 px-2">
+                          <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-0.5 justify-center">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                            Pronto: {editFileName}
+                          </p>
+                          <p className="text-[8px] text-slate-400 text-center">
+                            Arquivo carregado com sucesso.
+                          </p>
+                        </div>
+                      ) : editFileUrl && editFileUrl !== '#' ? (
+                        <div className="text-slate-700 px-2">
+                          <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-0.5 justify-center">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                            Link Vinculado!
+                          </p>
+                          <p className="text-[8px] text-slate-400 max-w-[180px] truncate text-center">
+                            {editFileUrl}
                           </p>
                         </div>
                       ) : (
                         <div>
                           <p className="text-[10px] font-semibold text-slate-700">Escolha um novo arquivo</p>
-                          <p className="text-[8px] text-slate-400">PDF, Word, Imagem (Máx: 2MB)</p>
+                          <p className="text-[8px] text-slate-400">PDF, Word, Imagem (Máx: 5MB com compactação automática)</p>
                         </div>
                       )}
                     </div>
+                  </div>
+                  <div className="mt-2 text-left">
+                    <span className="text-[10px] text-slate-400 block mb-0.5">Ou informe o link externo do documento:</span>
+                    <input
+                      type="url"
+                      placeholder="https://drive.google.com/..."
+                      value={editFileUrl && !editFileUrl.startsWith('data:') && !editFileUrl.startsWith('chunked|') && editFileUrl !== '#' ? editFileUrl : ''}
+                      onChange={(e) => setEditFileUrl(e.target.value)}
+                      className="w-full p-2 border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white font-sans"
+                    />
                   </div>
                 </div>
               </div>

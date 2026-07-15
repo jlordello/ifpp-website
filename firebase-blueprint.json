@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "System administrator and content editor users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string" }
+      }
+    },
+    "TransparencyRecord": {
+      "title": "TransparencyRecord",
+      "description": "Public interest document records of accounting or general transparency",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "year": { "type": "integer" },
+        "description": { "type": "string" },
+        "date": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "projectLinked": { "type": "string" },
+        "fundingSource": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "createdByUserName": { "type": "string" },
+        "updatedByUserName": { "type": "string" }
+      }
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Projects, events, or courses funded or executed",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "year": { "type": "integer" },
+        "description": { "type": "string" },
+        "status": { "type": "string" },
+        "impact": { "type": "string" },
+        "location": { "type": "string" },
+        "budget": { "type": "number" },
+        "emendaId": { "type": "string" },
+        "createdByUserName": { "type": "string" },
+        "updatedByUserName": { "type": "string" }
+      }
+    },
+    "Emenda": {
+      "title": "Emenda",
+      "description": "Government emendas providing funding",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "author": { "type": "string" },
+        "amount": { "type": "number" },
+        "year": { "type": "integer" },
+        "description": { "type": "string" },
+        "allocatedProjectId": { "type": "string" },
+        "createdByUserName": { "type": "string" },
+        "updatedByUserName": { "type": "string" }
+      }
+    },
+    "FileChunk": {
+      "title": "FileChunk",
+      "description": "A single data slice of a chunked uploaded document",
+      "type": "object",
+      "properties": {
+        "recordId": { "type": "string" },
+        "index": { "type": "integer" },
+        "data": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "records/{recordId}": {
+      "schema": "TransparencyRecord",
+      "description": "Stores individual accounting and transparency records"
+    },
+    "projects/{projectId}": {
+      "schema": "Project",
+      "description": "Stores institution projects, courses, and events"
+    },
+    "emendas/{emendaId}": {
+      "schema": "Emenda",
+      "description": "Stores official legislative emendas information"
+    },
+    "users/{userId}": {
+      "schema": "AdminUser",
+      "description": "Local admin/editor users registry"
+    },
+    "file_chunks/{chunkId}": {
+      "schema": "FileChunk",
+      "description": "Slices of larger files stored as base64 sub-records"
+    }
+  }
+}

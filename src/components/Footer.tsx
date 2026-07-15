@@ -104,10 +104,6 @@ export default function Footer({ setActiveTab }: FooterProps) {
         <div className="pt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-slate-400">
           <p>© {currentYear} IFPP - Instituto de Formação e Promoção de Políticas Públicas. Todos os direitos reservados.</p>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Award className="w-4 h-4 text-emerald-500" />
-              <span>Fundado em 2021 • Transparência Pública Ativa</span>
-            </div>
             <button 
               onClick={() => setActiveTab('admin')}
               className="text-slate-600 hover:text-indigo-400 transition-colors p-1 rounded hover:bg-indigo-900/40 focus:outline-none cursor-pointer"

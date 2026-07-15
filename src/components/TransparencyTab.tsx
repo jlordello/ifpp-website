@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TransparencyRecord, Project, Emenda } from '../types';
+import { reconstructFileUrl } from '../lib/firebase';
 import { 
   FileText, Search, Filter, Download, Calendar, ExternalLink, 
   DollarSign, Landmark, TrendingUp, HelpCircle, Eye, ChevronRight
@@ -15,10 +16,19 @@ function getDownloadFileName(title: string, dataUrl: string): string {
   const cleanTitle = title.replace(/[^a-zA-Z0-9\s-_]/g, '').trim().replace(/\s+/g, '_') || 'documento';
   let extension = '.pdf'; // default
   
-  if (dataUrl && dataUrl.startsWith('data:')) {
-    const match = dataUrl.match(/^data:(.*?);/);
-    if (match && match[1]) {
-      const mimeType = match[1];
+  if (dataUrl && (dataUrl.startsWith('data:') || dataUrl.startsWith('chunked|'))) {
+    let mimeType = '';
+    if (dataUrl.startsWith('chunked|')) {
+      const parts = dataUrl.split('|');
+      mimeType = parts[1];
+    } else {
+      const match = dataUrl.match(/^data:(.*?);/);
+      if (match && match[1]) {
+        mimeType = match[1];
+      }
+    }
+    
+    if (mimeType) {
       if (mimeType.includes('pdf')) {
         extension = '.pdf';
       } else if (mimeType.includes('png')) {
@@ -43,6 +53,131 @@ export default function TransparencyTab({ records, projects, emendas }: Transpar
   const [filterYear, setFilterYear] = useState<string>('todos');
   const [selectedRecord, setSelectedRecord] = useState<TransparencyRecord | null>(null);
   const [downloadNotification, setDownloadNotification] = useState<string | null>(null);
+  const [isDecompressing, setIsDecompressing] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<{ title: string; url: string; mimeType: string } | null>(null);
+
+  const closePreview = () => {
+    if (previewFile) {
+      if (previewFile.url.startsWith('blob:')) {
+        URL.revokeObjectURL(previewFile.url);
+      }
+      setPreviewFile(null);
+    }
+  };
+
+  const handleFileClick = async (title: string, fileUrl: string, recordId?: string) => {
+    if (!fileUrl || fileUrl === '#') return;
+
+    let targetUrl = fileUrl;
+    if (fileUrl.startsWith('chunked|') && recordId) {
+      try {
+        setIsDecompressing(title);
+        targetUrl = await reconstructFileUrl(fileUrl, recordId);
+      } catch (err) {
+        console.error("Erro ao carregar partes do arquivo:", err);
+        alert("Não foi possível baixar o arquivo do banco de dados.");
+        setIsDecompressing(null);
+        return;
+      }
+    }
+
+    if (!targetUrl.startsWith('data:')) {
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      setIsDecompressing(null);
+      return;
+    }
+
+    const isCompressed = targetUrl.includes(';base64,GZIP:');
+    if (isCompressed) {
+      try {
+        setIsDecompressing(title);
+        
+        const commaIndex = targetUrl.indexOf(',');
+        const mimeType = targetUrl.substring(5, targetUrl.indexOf(';'));
+        let base64Data = targetUrl.substring(commaIndex + 1);
+        while (base64Data.startsWith('GZIP:')) {
+          base64Data = base64Data.substring(5);
+        }
+        
+        // Convert base64 to binary bytes
+        const binaryString = atob(base64Data);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Decompress Gzip
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(bytes);
+            controller.close();
+          }
+        }).pipeThrough(new (window as any).DecompressionStream('gzip'));
+        
+        const response = new Response(stream);
+        const decompressedBlob = await response.blob();
+        
+        const typedBlob = new Blob([decompressedBlob], { type: mimeType });
+        const blobUrl = URL.createObjectURL(typedBlob);
+        
+        // Set preview file with Blob URL
+        setPreviewFile({ title, url: blobUrl, mimeType });
+      } catch (err) {
+        console.error("Erro na descompactação:", err);
+        
+        try {
+          const commaIndex = targetUrl.indexOf(',');
+          const mimeType = targetUrl.substring(5, targetUrl.indexOf(';'));
+          let base64Data = targetUrl.substring(commaIndex + 1);
+          while (base64Data.startsWith('GZIP:')) {
+            base64Data = base64Data.substring(5);
+          }
+          const binaryString = atob(base64Data);
+          const len = binaryString.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const typedBlob = new Blob([bytes], { type: mimeType });
+          const blobUrl = URL.createObjectURL(typedBlob);
+          setPreviewFile({ title, url: blobUrl, mimeType });
+        } catch (blobErr) {
+          console.error("Erro de fallback para blob:", blobErr);
+          setPreviewFile({ title, url: '', mimeType: 'unavailable' });
+        }
+      } finally {
+        setIsDecompressing(null);
+      }
+    } else {
+      try {
+        const commaIndex = targetUrl.indexOf(',');
+        if (commaIndex !== -1) {
+          const mimeType = targetUrl.substring(5, targetUrl.indexOf(';'));
+          const base64Data = targetUrl.substring(commaIndex + 1);
+          
+          const binaryString = atob(base64Data);
+          const len = binaryString.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          const typedBlob = new Blob([bytes], { type: mimeType });
+          const blobUrl = URL.createObjectURL(typedBlob);
+          
+          setPreviewFile({ title, url: blobUrl, mimeType });
+        } else {
+          throw new Error("Formato data URL inválido");
+        }
+      } catch (err) {
+        console.error("Erro ao converter data URL em Blob, tentando visualização direta de dados:", err);
+        setPreviewFile({ title, url: '', mimeType: 'unavailable' });
+      } finally {
+        setIsDecompressing(null);
+      }
+    }
+  };
 
   const triggerDownloadNotification = (title: string) => {
     setDownloadNotification(`Iniciando download do documento "${title}" (Simulação PDF oficial assinado)`);
@@ -343,16 +478,18 @@ export default function TransparencyTab({ records, projects, emendas }: Transpar
                         Ver Detalhes
                       </button>
                       {record.fileUrl && record.fileUrl !== '#' ? (
-                        <a
-                          href={record.fileUrl}
-                          target={record.fileUrl.startsWith('data:') ? undefined : "_blank"}
-                          download={record.fileUrl.startsWith('data:') ? getDownloadFileName(record.title, record.fileUrl) : undefined}
-                          rel="noopener noreferrer"
-                          className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-800 transition-colors cursor-pointer flex items-center justify-center"
+                        <button
+                          onClick={() => handleFileClick(record.title, record.fileUrl, record.id)}
+                          className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-800 transition-colors cursor-pointer flex items-center justify-center relative min-w-[36px]"
                           title="Visualizar / Baixar Documento"
+                          disabled={isDecompressing === record.title}
                         >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
+                          {isDecompressing === record.title ? (
+                            <span className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <ExternalLink className="w-4 h-4" />
+                          )}
+                        </button>
                       ) : (
                         <button
                           onClick={() => triggerDownloadNotification(record.title)}
@@ -444,16 +581,23 @@ export default function TransparencyTab({ records, projects, emendas }: Transpar
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               {selectedRecord.fileUrl && selectedRecord.fileUrl !== '#' ? (
-                <a
-                  href={selectedRecord.fileUrl}
-                  target={selectedRecord.fileUrl.startsWith('data:') ? undefined : "_blank"}
-                  download={selectedRecord.fileUrl.startsWith('data:') ? getDownloadFileName(selectedRecord.title, selectedRecord.fileUrl) : undefined}
-                  rel="noopener noreferrer"
-                  className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer text-center"
+                <button
+                  onClick={() => handleFileClick(selectedRecord.title, selectedRecord.fileUrl, selectedRecord.id)}
+                  className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer text-center disabled:opacity-75"
+                  disabled={isDecompressing === selectedRecord.title}
                 >
-                  <ExternalLink className="w-4 h-4" />
-                  Visualizar / Baixar Documento
-                </a>
+                  {isDecompressing === selectedRecord.title ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Descompactando arquivo...
+                    </>
+                  ) : (
+                    <>
+                      <ExternalLink className="w-4 h-4" />
+                      Visualizar / Baixar Documento
+                    </>
+                  )}
+                </button>
               ) : (
                 <button
                   onClick={() => triggerDownloadNotification(selectedRecord.title)}
@@ -472,6 +616,131 @@ export default function TransparencyTab({ records, projects, emendas }: Transpar
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Visualizador de Documentos Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 bg-indigo-950 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 max-w-[50%] sm:max-w-[70%]">
+                <FileText className="w-5 h-5 text-indigo-200 shrink-0" />
+                <h3 className="font-bold text-xs sm:text-sm truncate" title={previewFile.title}>
+                  Visualizando: {previewFile.title}
+                </h3>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    window.open(previewFile.url, '_blank');
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-900 hover:bg-indigo-800 text-[10px] sm:text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer text-indigo-100"
+                  title="Abrir em Nova Aba"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Abrir em Nova Aba</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    const filename = getDownloadFileName(previewFile.title, previewFile.url);
+                    const link = document.createElement('a');
+                    link.href = previewFile.url;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-[10px] sm:text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer text-white"
+                  title="Baixar Arquivo"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Baixar</span>
+                </button>
+
+                <button
+                  onClick={closePreview}
+                  className="py-1.5 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer text-xs font-bold"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            {/* Viewport Content */}
+            <div className="flex-1 p-4 bg-slate-50 overflow-auto flex flex-col justify-center items-center">
+              {previewFile.mimeType.includes('pdf') ? (
+                <div className="w-full h-full flex flex-col">
+                  {/* Warning message for mobile browsers */}
+                  <div className="sm:hidden mb-2 text-[11px] text-indigo-900 bg-indigo-50 p-2 rounded border border-indigo-100 flex items-center gap-1">
+                    <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Se o PDF não carregar abaixo, clique em "Abrir em Nova Aba".</span>
+                  </div>
+                  <iframe
+                    src={previewFile.url}
+                    className="w-full flex-1 rounded-xl border border-slate-200 bg-white shadow-inner"
+                    title="Visualizador de PDF"
+                  />
+                </div>
+              ) : previewFile.mimeType.startsWith('image/') ? (
+                <div className="max-w-full max-h-full flex items-center justify-center p-2">
+                  <img
+                    src={previewFile.url}
+                    alt={previewFile.title}
+                    className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-md bg-white border border-slate-200"
+                  />
+                </div>
+              ) : (
+                <div className="text-center p-8 max-w-md bg-white rounded-2xl border border-slate-200 shadow-sm">
+                  <FileText className="w-12 h-12 text-indigo-500 mx-auto mb-4" />
+                  <h4 className="font-bold text-slate-800 text-sm mb-2">Visualização Indisponível</h4>
+                  <p className="text-slate-500 text-xs leading-relaxed mb-6">
+                    A visualização direta está indisponível para este tipo de documento ({previewFile.mimeType}). 
+                    Por favor, utilize as opções de download para obter o arquivo completo.
+                  </p>
+                  <div className="flex justify-center gap-3">
+                    <button
+                      onClick={() => {
+                        window.open(previewFile.url, '_blank');
+                      }}
+                      className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Abrir em Nova Aba
+                    </button>
+                    <button
+                      onClick={() => {
+                        const filename = getDownloadFileName(previewFile.title, previewFile.url);
+                        const link = document.createElement('a');
+                        link.href = previewFile.url;
+                        link.download = filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      Baixar Documento
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 bg-slate-100 border-t border-slate-200 flex justify-end gap-3 text-xs shrink-0">
+              <button
+                onClick={closePreview}
+                className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold transition-colors cursor-pointer"
+              >
+                Voltar para o Repositório
+              </button>
+            </div>
           </div>
         </div>
       )}

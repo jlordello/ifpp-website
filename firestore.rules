@@ -10,5 +10,11 @@ service cloud.firestore {
     match /emendas/{document} {
       allow read, write: if true;
     }
+    match /users/{document} {
+      allow read, write: if true;
+    }
+    match /file_chunks/{document} {
+      allow read, write: if true;
+    }
   }
 }

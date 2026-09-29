@@ -24,10 +24,13 @@
         "description": { "type": "string" },
         "date": { "type": "string" },
         "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileType": { "type": "string" },
         "projectLinked": { "type": "string" },
         "fundingSource": { "type": "string" },
         "amount": { "type": "number" },
         "category": { "type": "string" },
+        "docCategory": { "type": "string" },
         "createdByUserName": { "type": "string" },
         "updatedByUserName": { "type": "string" }
       }
@@ -40,13 +43,23 @@
         "id": { "type": "string" },
         "title": { "type": "string" },
         "type": { "type": "string" },
+        "category": { "type": "string" },
         "year": { "type": "integer" },
         "description": { "type": "string" },
+        "fullDescription": { "type": "string" },
         "status": { "type": "string" },
         "impact": { "type": "string" },
         "location": { "type": "string" },
+        "mainImage": { "type": "string" },
         "budget": { "type": "number" },
         "emendaId": { "type": "string" },
+        "fundingSourceType": { "type": "string" },
+        "fundingInstrument": { "type": "string" },
+        "fundingOrgan": { "type": "string" },
+        "fundingAuthor": { "type": "string" },
+        "receivedAmount": { "type": "number" },
+        "provenExpenses": { "type": "number" },
+        "balance": { "type": "number" },
         "createdByUserName": { "type": "string" },
         "updatedByUserName": { "type": "string" }
       }
@@ -76,6 +89,15 @@
         "index": { "type": "integer" },
         "data": { "type": "string" }
       }
+    },
+    "TestConnection": {
+      "title": "TestConnection",
+      "description": "Heartbeat and health check test probe document",
+      "type": "object",
+      "properties": {
+        "connected": { "type": "boolean" },
+        "timestamp": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -98,6 +120,10 @@
     "file_chunks/{chunkId}": {
       "schema": "FileChunk",
       "description": "Slices of larger files stored as base64 sub-records"
+    },
+    "test/{testId}": {
+      "schema": "TestConnection",
+      "description": "Connectivity test document to verify Firestore health"
     }
   }
 }

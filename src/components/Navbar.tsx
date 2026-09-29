@@ -13,7 +13,7 @@ export default function Navbar({ activeTab, setActiveTab, isAdminLoggedIn, onLog
 
   const navItems = [
     { id: 'home', label: 'Início', icon: Landmark },
-    { id: 'projects', label: 'Projetos & Cursos', icon: FileText },
+    { id: 'projects', label: 'Nossas Ações', icon: FileText },
     { id: 'transparency', label: 'Transparência', icon: ShieldCheck },
   ];
 

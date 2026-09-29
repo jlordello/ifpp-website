@@ -1,32 +1,80 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, onSnapshot, setDoc, doc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  initializeFirestore,
+  getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  memoryLocalCache,
+  collection,
+  onSnapshot,
+  setDoc,
+  doc,
+  deleteDoc,
+  writeBatch,
+  getDoc,
+  getDocFromServer,
+  Firestore
+} from 'firebase/firestore';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { TransparencyRecord, Project, Emenda, AdminUser } from '../types';
 import { initialProjects, initialEmendas, initialRecords } from '../data/initialData';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDIAnI6BW2aDVYVO2MRIE4oetnO2Y7FcLU",
-  authDomain: "barbearia-genesis.firebaseapp.com",
-  projectId: "barbearia-genesis",
-  storageBucket: "barbearia-genesis.firebasestorage.app",
-  messagingSenderId: "759365410229",
-  appId: "1:759365410229:web:f4ffe3fa2486b2161d0dfc"
-};
 
 export const initialUsers: AdminUser[] = [
   {
     id: 'user-admin',
     username: 'admin',
     name: 'Administrador Principal',
-    password: 'admin123',
+    password: '241910',
     role: 'admin'
   }
 ];
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase App safely
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore with custom database ID
-export const db = getFirestore(app, "ai-studio-ifppinstitutodep-93f1bcb0-a477-4dab-9bcf-8e976363cebf");
+// Initialize Firestore with custom database ID, forced long polling to prevent iframe WebChannel drop errors
+let firestoreInstance: Firestore;
+try {
+  let cacheConfig;
+  try {
+    cacheConfig = persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    });
+  } catch {
+    cacheConfig = memoryLocalCache();
+  }
+
+  firestoreInstance = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+    localCache: cacheConfig
+  }, firebaseConfig.firestoreDatabaseId);
+} catch {
+  // If already initialized, retrieve existing instance
+  firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+}
+
+export const db = firestoreInstance;
+
+// Validate connection to Firestore as mandated by skill
+export async function testConnection(): Promise<boolean> {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    console.info("Conexão ao Cloud Firestore estabelecida com sucesso.");
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn("Firestore em modo offline; dados sincronizados assim que a conexão estabilizar.");
+    } else {
+      console.info("Teste de conexão Firestore concluído.");
+    }
+    return false;
+  }
+}
+
+// Initial non-blocking connection probe
+if (typeof window !== 'undefined') {
+  testConnection().catch(() => {});
+}
 
 // Firestore Collection References
 export const recordsCol = collection(db, 'records');
@@ -99,9 +147,9 @@ export function syncCollection<T>(
   const colRef = collection(db, collectionName);
   
   return onSnapshot(colRef, async (snapshot) => {
-    if (snapshot.empty) {
-      // If the online database is completely empty for this collection, seed it
-      console.log(`Collection ${collectionName} is empty. Seeding initial data...`);
+    if (snapshot.empty && !snapshot.metadata.fromCache) {
+      // If the online database is confirmed empty from backend, seed it
+      console.log(`Collection ${collectionName} is empty on server. Seeding initial data...`);
       try {
         const batch = writeBatch(db);
         initialSeeds.forEach((item: any) => {
@@ -117,14 +165,20 @@ export function syncCollection<T>(
       snapshot.forEach((doc) => {
         data.push(doc.data() as T);
       });
-      onUpdate(data);
+      if (data.length > 0) {
+        onUpdate(data);
+      }
     }
   }, (error) => {
-    console.error(`Error syncing ${collectionName}:`, error);
-    try {
-      handleFirestoreError(error, OperationType.LIST, collectionName);
-    } catch (e) {
-      // Keep running sync listener errors from crashing entirely, but ensure they are logged
+    if (error?.code === 'unavailable' || (error instanceof Error && error.message.includes('offline'))) {
+      console.warn(`Sincronização de ${collectionName} em modo offline/aguardando rede.`);
+    } else {
+      console.error(`Error syncing ${collectionName}:`, error);
+      try {
+        handleFirestoreError(error, OperationType.LIST, collectionName);
+      } catch (e) {
+        // Keep running sync listener from crashing application
+      }
     }
   });
 }

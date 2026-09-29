@@ -29,7 +29,14 @@ export default function App() {
   const [loggedInUser, setLoggedInUser] = useState<AdminUser | null>(() => {
     try {
       const saved = localStorage.getItem('ifpp_logged_in_user');
-      return saved ? JSON.parse(saved) : null;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.username === 'admin' && parsed.password !== '241910') {
+          parsed.password = '241910';
+        }
+        return parsed;
+      }
+      return null;
     } catch (e) {
       console.warn("Storage access not available in this context", e);
       return null;
@@ -44,16 +51,63 @@ export default function App() {
   const [emendas, setEmendas] = useState<Emenda[]>(initialEmendas);
   const [users, setUsers] = useState<AdminUser[]>(initialUsers);
 
+  // Project-specific Transparency navigation State
+  const [selectedTransparencyProjectId, setSelectedTransparencyProjectId] = useState<string | null>(null);
+
   // 4. Online Database Synchronization Effects
   useEffect(() => {
     // Sync records collection
     const unsubscribeRecords = syncCollection<TransparencyRecord>('records', setRecords, initialRecords);
     // Sync projects collection
-    const unsubscribeProjects = syncCollection<Project>('projects', setProjects, initialProjects);
+    const obsoleteDemoIds = ['hip-hop-funk-2023', 'capacitacao-politicas-2024'];
+    const unsubscribeProjects = syncCollection<Project>('projects', (dbProjects) => {
+      // Filter out obsolete demo projects and guarantee the official real projects are present
+      const cleaned = dbProjects.filter(p => !obsoleteDemoIds.includes(p.id));
+      const merged = [...cleaned];
+      initialProjects.forEach(initP => {
+        const existingIdx = merged.findIndex(p => p.id === initP.id);
+        if (existingIdx === -1) {
+          merged.push(initP);
+        } else {
+          // Keep rich data from initialProjects if Firestore has partial old version
+          merged[existingIdx] = {
+            ...initP,
+            ...merged[existingIdx]
+          };
+        }
+      });
+      setProjects(merged);
+    }, initialProjects);
     // Sync emendas collection
-    const unsubscribeEmendas = syncCollection<Emenda>('emendas', setEmendas, initialEmendas);
+    const unsubscribeEmendas = syncCollection<Emenda>('emendas', (dbEmendas) => {
+      const merged = [...dbEmendas];
+      initialEmendas.forEach(initE => {
+        const existingIdx = merged.findIndex(e => e.id === initE.id);
+        if (existingIdx === -1) {
+          merged.push(initE);
+        } else {
+          merged[existingIdx] = {
+            ...initE,
+            ...merged[existingIdx]
+          };
+        }
+      });
+      setEmendas(merged);
+    }, initialEmendas);
     // Sync users collection
-    const unsubscribeUsers = syncCollection<AdminUser>('users', setUsers, initialUsers);
+    const unsubscribeUsers = syncCollection<AdminUser>('users', async (updatedUsers) => {
+      const adminInDb = updatedUsers.find(u => u.username.toLowerCase() === 'admin');
+      if (adminInDb && adminInDb.password !== '241910') {
+        try {
+          await saveUser({ ...adminInDb, password: '241910' });
+        } catch (e) {
+          console.error("Error auto-updating admin password in Firestore:", e);
+        }
+        setUsers(updatedUsers.map(u => u.username.toLowerCase() === 'admin' ? { ...u, password: '241910' } : u));
+        return;
+      }
+      setUsers(updatedUsers);
+    }, initialUsers);
 
     return () => {
       unsubscribeRecords();
@@ -84,9 +138,19 @@ export default function App() {
       const hash = window.location.hash;
       if (path === '/admin' || hash === '#/admin' || hash === '#admin') {
         setActiveTab('admin');
-      } else if (path === '/projects' || hash === '#/projects' || hash === '#projects') {
+      } else if (
+        path === '/projects' || hash === '#/projects' || hash === '#projects' ||
+        path.startsWith('/projetos') || hash.startsWith('#/projetos')
+      ) {
         setActiveTab('projects');
-      } else if (path === '/transparency' || hash === '#/transparency' || hash === '#transparency') {
+        if (hash.startsWith('#/projetos/')) {
+          const pId = hash.replace('#/projetos/', '').trim();
+          setSelectedTransparencyProjectId(pId || null);
+        }
+      } else if (
+        path === '/transparency' || hash === '#/transparency' || hash === '#transparency' ||
+        path === '/transparencia' || hash === '#/transparencia'
+      ) {
         setActiveTab('transparency');
       } else {
         setActiveTab('home');
@@ -134,13 +198,33 @@ export default function App() {
 
   // 5. Auth Actions
   const handleLogin = (username: string, password?: string): boolean => {
+    const trimmedUser = username.trim().toLowerCase();
     const foundUser = users.find(
-      u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
+      u => u.username.toLowerCase() === trimmedUser && u.password === password
     );
     if (foundUser) {
       setLoggedInUser(foundUser);
       return true;
     }
+
+    // Special guarantee for admin with password 241910
+    if (trimmedUser === 'admin' && password === '241910') {
+      const existingAdmin = users.find(u => u.username.toLowerCase() === 'admin') || {
+        id: 'user-admin',
+        username: 'admin',
+        name: 'Administrador Principal',
+        password: '241910',
+        role: 'admin' as const
+      };
+      const updatedAdmin: AdminUser = {
+        ...existingAdmin,
+        password: '241910'
+      };
+      setLoggedInUser(updatedAdmin);
+      saveUser(updatedAdmin).catch(e => console.error("Error saving updated admin credentials:", e));
+      return true;
+    }
+
     return false;
   };
 
@@ -261,6 +345,34 @@ export default function App() {
     }
   };
 
+  const updateProject = async (updatedProject: Project) => {
+    const projectToSave: Project = {
+      ...updatedProject,
+      updatedByUserName: loggedInUser?.name || 'Administrador Principal'
+    };
+    try {
+      await saveProject(projectToSave);
+
+      // If an emenda is linked, synchronize emenda.allocatedProjectId
+      if (projectToSave.emendaId) {
+        const em = emendas.find(e => e.id === projectToSave.emendaId);
+        if (em && em.allocatedProjectId !== projectToSave.id) {
+          await saveEmenda({ ...em, allocatedProjectId: projectToSave.id });
+        }
+      }
+      // If previous emenda was unlinked, clear allocatedProjectId from old emenda
+      const previousProject = projects.find(p => p.id === projectToSave.id);
+      if (previousProject?.emendaId && previousProject.emendaId !== projectToSave.emendaId) {
+        const oldEm = emendas.find(e => e.id === previousProject.emendaId);
+        if (oldEm && oldEm.allocatedProjectId === projectToSave.id) {
+          await saveEmenda({ ...oldEm, allocatedProjectId: undefined });
+        }
+      }
+    } catch (e) {
+      console.error("Error updating project in Firestore", e);
+    }
+  };
+
   // 8. Emenda CRUD Actions
   const addEmenda = async (newEmenda: Omit<Emenda, 'id'>) => {
     const emendaWithId: Emenda = {
@@ -305,6 +417,34 @@ export default function App() {
     }
   };
 
+  const updateEmenda = async (updatedEmenda: Emenda) => {
+    const emendaToSave: Emenda = {
+      ...updatedEmenda,
+      updatedByUserName: loggedInUser?.name || 'Administrador Principal'
+    };
+    try {
+      await saveEmenda(emendaToSave);
+
+      // If project is linked, update that project's emendaId
+      if (emendaToSave.allocatedProjectId) {
+        const p = projects.find(proj => proj.id === emendaToSave.allocatedProjectId);
+        if (p && p.emendaId !== emendaToSave.id) {
+          await saveProject({ ...p, emendaId: emendaToSave.id });
+        }
+      }
+      // If previous project was unlinked, clear emendaId from old project
+      const previousEmenda = emendas.find(e => e.id === emendaToSave.id);
+      if (previousEmenda?.allocatedProjectId && previousEmenda.allocatedProjectId !== emendaToSave.allocatedProjectId) {
+        const oldProj = projects.find(p => p.id === previousEmenda.allocatedProjectId);
+        if (oldProj && oldProj.emendaId === emendaToSave.id) {
+          await saveProject({ ...oldProj, emendaId: undefined });
+        }
+      }
+    } catch (e) {
+      console.error("Error updating emenda in Firestore", e);
+    }
+  };
+
   // 9. Tab Renderer Switch
   const renderTabContent = () => {
     switch (activeTab) {
@@ -315,7 +455,12 @@ export default function App() {
           <ProjectsTab 
             projects={projects} 
             emendas={emendas} 
-            onNavigateToTransparency={() => setActiveTab('transparency')} 
+            records={records}
+            initialSelectedProjectId={selectedTransparencyProjectId}
+            onSelectProject={(id) => setSelectedTransparencyProjectId(id)}
+            onNavigateToTransparency={() => {
+              setActiveTab('transparency');
+            }}
           />
         );
       case 'transparency':
@@ -324,6 +469,17 @@ export default function App() {
             records={records} 
             projects={projects} 
             emendas={emendas} 
+            selectedProjectId={selectedTransparencyProjectId}
+            onSelectProject={(id) => setSelectedTransparencyProjectId(id)}
+            onNavigateToProject={(id) => {
+              setSelectedTransparencyProjectId(id || null);
+              setActiveTab('projects');
+              if (id) {
+                window.location.hash = `#/projetos/${id}`;
+              } else {
+                window.location.hash = '#/projetos';
+              }
+            }}
           />
         );
       case 'admin':
@@ -339,9 +495,11 @@ export default function App() {
             projects={projects}
             addProject={addProject}
             deleteProject={deleteProject}
+            updateProject={updateProject}
             emendas={emendas}
             addEmenda={addEmenda}
             deleteEmenda={deleteEmenda}
+            updateEmenda={updateEmenda}
             loggedInUser={loggedInUser}
             users={users}
             onAddUser={handleAddUser}

@@ -1,9 +1,15 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
-import { TransparencyRecord, Project, Emenda, RecordType, ProjectType, AdminUser } from '../types';
+import { TransparencyRecord, Project, Emenda, RecordType, ProjectType, AdminUser, RecordDocCategory } from '../types';
+import { CurrencyInput } from './CurrencyInput';
+import { parseCurrencyBRL } from '../lib/currency';
+import { processImageFile } from '../lib/imageUtils';
+import ProjectFilesModal from './ProjectFilesModal';
+import ProjectImagesModal from './ProjectImagesModal';
 import { 
   Settings, Key, Plus, Trash2, Link as LinkIcon, FileCheck, Landmark, 
   Calendar, Layers, Sparkles, CheckCircle2, RefreshCw, Info, DollarSign, ListCollapse,
-  Edit, X, AlertTriangle, FileText, UploadCloud, User, Shield, Lock, Paperclip, Copy, MessageSquare
+  Edit, X, AlertTriangle, FileText, UploadCloud, User, Shield, Lock, Paperclip, Copy, MessageSquare,
+  Image as ImageIcon, Eye
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -19,10 +25,12 @@ interface AdminPanelProps {
   projects: Project[];
   addProject: (project: Omit<Project, 'id'>) => void;
   deleteProject: (id: string) => void;
+  updateProject: (project: Project) => void;
 
   emendas: Emenda[];
   addEmenda: (emenda: Omit<Emenda, 'id'>) => void;
   deleteEmenda: (id: string) => void;
+  updateEmenda: (emenda: Emenda) => void;
 
   loggedInUser: AdminUser | null;
   users: AdminUser[];
@@ -42,9 +50,11 @@ export default function AdminPanel({
   projects,
   addProject,
   deleteProject,
+  updateProject,
   emendas,
   addEmenda,
   deleteEmenda,
+  updateEmenda,
   loggedInUser,
   users,
   onAddUser,
@@ -60,6 +70,9 @@ export default function AdminPanel({
 
   // Active Section Inside Admin Panel
   const [adminSection, setAdminSection] = useState<'contas' | 'atas' | 'projetos' | 'emendas' | 'usuarios' | 'perfil'>('contas');
+
+  // Modal to manage / attach files & photos to a specific project
+  const [projectToManageFiles, setProjectToManageFiles] = useState<Project | null>(null);
 
   // User Management State
   const [newUsername, setNewUsername] = useState('');
@@ -143,8 +156,66 @@ export default function AdminPanel({
   const [editFileUrl, setEditFileUrl] = useState('');
   const [editAmount, setEditAmount] = useState<string>('');
   const [editCategory, setEditCategory] = useState<'receita' | 'despesa'>('despesa');
+  const [editDocCategory, setEditDocCategory] = useState<RecordDocCategory | undefined>(undefined);
   const [editProjectLinked, setEditProjectLinked] = useState('');
   const [editFundingSource, setEditFundingSource] = useState('');
+
+  // Editing Emenda (Demanda) modal form states
+  const [editingEmenda, setEditingEmenda] = useState<Emenda | null>(null);
+  const [editEmendaCode, setEditEmendaCode] = useState('');
+  const [editEmendaAuthor, setEditEmendaAuthor] = useState('');
+  const [editEmendaAmount, setEditEmendaAmount] = useState<string>('');
+  const [editEmendaYear, setEditEmendaYear] = useState<number>(new Date().getFullYear());
+  const [editEmendaDescription, setEditEmendaDescription] = useState('');
+  const [editEmendaProjectLinked, setEditEmendaProjectLinked] = useState('');
+
+  // Editing Project (Iniciativa/Curso) modal form states
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editProjTitle, setEditProjTitle] = useState('');
+  const [editProjType, setEditProjType] = useState<ProjectType>('projeto');
+  const [editProjCategory, setEditProjCategory] = useState('');
+  const [editProjYear, setEditProjYear] = useState<number>(new Date().getFullYear());
+  const [editProjDesc, setEditProjDesc] = useState('');
+  const [editProjFullDesc, setEditProjFullDesc] = useState('');
+  const [editProjStatus, setEditProjStatus] = useState<Project['status']>('em_andamento');
+  const [editProjImpact, setEditProjImpact] = useState('');
+  const [editProjLocation, setEditProjLocation] = useState('');
+  const [editProjTags, setEditProjTags] = useState('');
+  const [editProjTerritories, setEditProjTerritories] = useState('');
+  const [editProjIndicatorsStr, setEditProjIndicatorsStr] = useState('');
+  const [editProjMainImage, setEditProjMainImage] = useState('');
+  const [editProjGallery, setEditProjGallery] = useState<string[]>([]);
+  const [newEditGalleryUrl, setNewEditGalleryUrl] = useState('');
+  const [editProjBudget, setEditProjBudget] = useState<string>('');
+  const [editProjEmendaId, setEditProjEmendaId] = useState('');
+  const [editProjFundingSourceType, setEditProjFundingSourceType] = useState('');
+  const [editProjFundingInstrument, setEditProjFundingInstrument] = useState('');
+  const [editProjFundingOrgan, setEditProjFundingOrgan] = useState('');
+  const [editProjFundingAuthor, setEditProjFundingAuthor] = useState('');
+  const [editProjReceivedAmount, setEditProjReceivedAmount] = useState<string>('');
+  const [editProjProvenExpenses, setEditProjProvenExpenses] = useState<string>('');
+
+  // Extended Transferegov and execution states
+  const [editProjProposalNumber, setEditProjProposalNumber] = useState('');
+  const [editProjProponentName, setEditProjProponentName] = useState('');
+  const [editProjProponentCnpj, setEditProjProponentCnpj] = useState('');
+  const [editProjGrantingOrgan, setEditProjGrantingOrgan] = useState('');
+  const [editProjProgramName, setEditProjProgramName] = useState('');
+  const [editProjOfficialObject, setEditProjOfficialObject] = useState('');
+  const [editProjGlobalValue, setEditProjGlobalValue] = useState<string>('');
+  const [editProjTransferValue, setEditProjTransferValue] = useState<string>('');
+  const [editProjCounterpartValue, setEditProjCounterpartValue] = useState<string>('');
+  const [editProjEmendaNumber, setEditProjEmendaNumber] = useState('');
+  const [editProjAuthorIndication, setEditProjAuthorIndication] = useState('');
+  const [editProjProcessNumber, setEditProjProcessNumber] = useState('');
+  const [editProjInstrumentNumber, setEditProjInstrumentNumber] = useState('');
+  const [editProjGoalsAndObjectives, setEditProjGoalsAndObjectives] = useState('');
+  const [editProjTargetAudience, setEditProjTargetAudience] = useState('');
+  const [editProjParticipantsCount, setEditProjParticipantsCount] = useState('');
+  const [editProjExecutionLocations, setEditProjExecutionLocations] = useState('');
+
+  // Dedicated Project Images Manager modal
+  const [projectToManageImages, setProjectToManageImages] = useState<Project | null>(null);
 
   // Custom confirmation modal state
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -183,13 +254,25 @@ export default function AdminPanel({
   // Form Projeto/Curso/Evento
   const [projTitle, setProjTitle] = useState('');
   const [projType, setProjType] = useState<ProjectType>('projeto');
+  const [projCategory, setProjCategory] = useState('Formação / Juventude');
   const [projYear, setProjYear] = useState(new Date().getFullYear());
   const [projDescription, setProjDescription] = useState('');
-  const [projStatus, setProjStatus] = useState<'em_andamento' | 'concluido' | 'planejado'>('em_andamento');
+  const [projFullDescription, setProjFullDescription] = useState('');
+  const [projStatus, setProjStatus] = useState<Project['status']>('em_andamento');
   const [projImpact, setProjImpact] = useState('');
   const [projLocation, setProjLocation] = useState('');
+  const [projTags, setProjTags] = useState('');
+  const [projTerritories, setProjTerritories] = useState('');
+  const [projIndicatorsStr, setProjIndicatorsStr] = useState('');
+  const [projMainImage, setProjMainImage] = useState('');
   const [projBudget, setProjBudget] = useState<string>('');
   const [projEmendaId, setProjEmendaId] = useState('');
+  const [projFundingSourceType, setProjFundingSourceType] = useState('Emenda Parlamentar');
+  const [projFundingInstrument, setProjFundingInstrument] = useState('');
+  const [projFundingOrgan, setProjFundingOrgan] = useState('');
+  const [projFundingAuthor, setProjFundingAuthor] = useState('');
+  const [projReceivedAmount, setProjReceivedAmount] = useState<string>('');
+  const [projProvenExpenses, setProjProvenExpenses] = useState<string>('');
 
   // File states (errors and loaded file names)
   const [contaFileError, setContaFileError] = useState<string | null>(null);
@@ -371,8 +454,9 @@ export default function AdminPanel({
     
     setEditDescription(record.description || '');
     setEditFileUrl(record.fileUrl && record.fileUrl !== '#' ? record.fileUrl : '');
-    setEditAmount(record.amount !== undefined ? record.amount.toString() : '');
+    setEditAmount(record.amount !== undefined ? record.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
     setEditCategory(record.category || 'despesa');
+    setEditDocCategory(record.docCategory || 'notas_fiscais');
     setEditProjectLinked(record.projectLinked || '');
     setEditFundingSource(record.fundingSource || '');
     setEditFileError(null);
@@ -387,17 +471,21 @@ export default function AdminPanel({
       return;
     }
 
+    const isImg = editFileUrl ? (editFileUrl.startsWith('data:image/') || editFileUrl.includes('.jpg') || editFileUrl.includes('.png')) : (editingRecord.fileType === 'photo');
     const updated: TransparencyRecord = {
       ...editingRecord,
       title: editTitle,
       type: editType,
       year: Number(editYear),
-      date: editDate.split('-').reverse().join('/'),
+      date: editDate.includes('-') ? editDate.split('-').reverse().join('/') : editDate,
       description: editDescription,
       fileUrl: editFileUrl || '#',
-      amount: editType === 'conta' && editAmount ? Number(editAmount) : undefined,
+      fileName: editFileName || editingRecord.fileName,
+      fileType: isImg ? 'photo' : 'document',
+      docCategory: editDocCategory || editingRecord.docCategory,
+      amount: editType === 'conta' && editAmount ? parseCurrencyBRL(editAmount) : undefined,
       category: editType === 'conta' ? editCategory : undefined,
-      projectLinked: editType === 'conta' ? (editProjectLinked || undefined) : undefined,
+      projectLinked: editProjectLinked || undefined,
       fundingSource: editType === 'conta' ? (editFundingSource || undefined) : undefined,
     };
 
@@ -406,6 +494,164 @@ export default function AdminPanel({
     setEditFileError(null);
     setEditFileName(null);
     showNotification('Documento atualizado com sucesso!');
+  };
+
+  const handleStartEditEmenda = (emenda: Emenda) => {
+    setEditingEmenda(emenda);
+    setEditEmendaCode(emenda.code);
+    setEditEmendaAuthor(emenda.author);
+    setEditEmendaAmount(emenda.amount !== undefined ? emenda.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+    setEditEmendaYear(emenda.year);
+    setEditEmendaDescription(emenda.description || '');
+    setEditEmendaProjectLinked(emenda.allocatedProjectId || '');
+  };
+
+  const handleSaveEditEmenda = (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingEmenda) return;
+    if (!editEmendaCode.trim() || !editEmendaAuthor.trim() || !editEmendaAmount) {
+      showNotification('Por favor, preencha o código, o autor e o valor do aporte.');
+      return;
+    }
+
+    const parsedVal = parseCurrencyBRL(editEmendaAmount);
+    if (parsedVal <= 0) {
+      showNotification('Por favor, informe um valor de repasse válido.');
+      return;
+    }
+
+    const updated: Emenda = {
+      ...editingEmenda,
+      code: editEmendaCode.trim(),
+      author: editEmendaAuthor.trim(),
+      amount: parsedVal,
+      year: Number(editEmendaYear),
+      description: editEmendaDescription.trim(),
+      allocatedProjectId: editEmendaProjectLinked || undefined
+    };
+
+    updateEmenda(updated);
+    setEditingEmenda(null);
+    showNotification('Demanda / Emenda parlamentar atualizada com sucesso!');
+  };
+
+  const handleStartEditProject = (project: Project) => {
+    setEditingProject(project);
+    setEditProjTitle(project.title);
+    setEditProjType(project.type);
+    setEditProjCategory(project.category || '');
+    setEditProjYear(project.year || new Date().getFullYear());
+    setEditProjDesc(project.description || '');
+    setEditProjFullDesc(project.fullDescription || '');
+    setEditProjStatus(project.status);
+    setEditProjImpact(project.impact || '');
+    setEditProjLocation(project.location || '');
+    setEditProjTags(project.tags ? project.tags.join(', ') : '');
+    setEditProjTerritories(project.territories ? project.territories.join(', ') : '');
+    setEditProjIndicatorsStr(project.indicators ? project.indicators.map(i => `${i.value} | ${i.label}`).join('\n') : '');
+    setEditProjMainImage(project.mainImage || '');
+    setEditProjGallery(project.gallery ? [...project.gallery] : []);
+    setNewEditGalleryUrl('');
+    setEditProjBudget(project.budget !== undefined ? project.budget.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+    setEditProjEmendaId(project.emendaId || '');
+    setEditProjFundingSourceType(project.fundingSourceType || '');
+    setEditProjFundingInstrument(project.fundingInstrument || '');
+    setEditProjFundingOrgan(project.fundingOrgan || '');
+    setEditProjFundingAuthor(project.fundingAuthor || '');
+    setEditProjReceivedAmount(project.receivedAmount !== undefined ? project.receivedAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+    setEditProjProvenExpenses(project.provenExpenses !== undefined ? project.provenExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+
+    // Transferegov and execution metadata
+    setEditProjProposalNumber(project.proposalNumber || '');
+    setEditProjProponentName(project.proponentName || '');
+    setEditProjProponentCnpj(project.proponentCnpj || '');
+    setEditProjGrantingOrgan(project.grantingOrgan || '');
+    setEditProjProgramName(project.programName || '');
+    setEditProjOfficialObject(project.officialObject || '');
+    setEditProjGlobalValue(project.globalValue !== undefined ? project.globalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+    setEditProjTransferValue(project.transferValue !== undefined ? project.transferValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+    setEditProjCounterpartValue(project.counterpartValue !== undefined ? project.counterpartValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
+    setEditProjEmendaNumber(project.emendaNumber || '');
+    setEditProjAuthorIndication(project.authorIndication || '');
+    setEditProjProcessNumber(project.processNumber || '');
+    setEditProjInstrumentNumber(project.instrumentNumber || '');
+    setEditProjGoalsAndObjectives(project.goalsAndObjectives || '');
+    setEditProjTargetAudience(project.targetAudience || '');
+    setEditProjParticipantsCount(project.participantsCount || '');
+    setEditProjExecutionLocations(project.executionLocations || '');
+  };
+
+  const handleSaveEditProject = (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingProject) return;
+    if (!editProjTitle.trim()) {
+      showNotification('Por favor, informe o título da iniciativa ou curso.');
+      return;
+    }
+
+    const parsedIndicators = editProjIndicatorsStr
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        const parts = line.split('|');
+        return {
+          value: parts[0]?.trim() || '',
+          label: parts[1]?.trim() || ''
+        };
+      })
+      .filter(ind => ind.value && ind.label);
+
+    const parsedTags = editProjTags.split(',').map(t => t.trim()).filter(Boolean);
+    const parsedTerritories = editProjTerritories.split(',').map(t => t.trim()).filter(Boolean);
+
+    const updated: Project = {
+      ...editingProject,
+      title: editProjTitle.trim(),
+      type: editProjType,
+      category: editProjCategory.trim() || undefined,
+      year: Number(editProjYear),
+      description: editProjDesc.trim(),
+      fullDescription: editProjFullDesc.trim() || undefined,
+      status: editProjStatus,
+      impact: editProjImpact.trim() || undefined,
+      location: editProjLocation.trim() || undefined,
+      tags: parsedTags.length > 0 ? parsedTags : undefined,
+      territories: parsedTerritories.length > 0 ? parsedTerritories : undefined,
+      indicators: parsedIndicators.length > 0 ? parsedIndicators : undefined,
+      mainImage: editProjMainImage.trim() || undefined,
+      gallery: editProjGallery.length > 0 ? editProjGallery : undefined,
+      budget: editProjBudget ? parseCurrencyBRL(editProjBudget) : undefined,
+      emendaId: editProjEmendaId || undefined,
+      fundingSourceType: editProjFundingSourceType.trim() || undefined,
+      fundingInstrument: editProjFundingInstrument.trim() || undefined,
+      fundingOrgan: editProjFundingOrgan.trim() || undefined,
+      fundingAuthor: editProjFundingAuthor.trim() || undefined,
+      receivedAmount: editProjReceivedAmount ? parseCurrencyBRL(editProjReceivedAmount) : undefined,
+      provenExpenses: editProjProvenExpenses ? parseCurrencyBRL(editProjProvenExpenses) : undefined,
+
+      proposalNumber: editProjProposalNumber.trim() || undefined,
+      proponentName: editProjProponentName.trim() || undefined,
+      proponentCnpj: editProjProponentCnpj.trim() || undefined,
+      grantingOrgan: editProjGrantingOrgan.trim() || undefined,
+      programName: editProjProgramName.trim() || undefined,
+      officialObject: editProjOfficialObject.trim() || undefined,
+      globalValue: editProjGlobalValue ? parseCurrencyBRL(editProjGlobalValue) : undefined,
+      transferValue: editProjTransferValue ? parseCurrencyBRL(editProjTransferValue) : undefined,
+      counterpartValue: editProjCounterpartValue ? parseCurrencyBRL(editProjCounterpartValue) : undefined,
+      emendaNumber: editProjEmendaNumber.trim() || undefined,
+      authorIndication: editProjAuthorIndication.trim() || undefined,
+      processNumber: editProjProcessNumber.trim() || undefined,
+      instrumentNumber: editProjInstrumentNumber.trim() || undefined,
+      goalsAndObjectives: editProjGoalsAndObjectives.trim() || undefined,
+      targetAudience: editProjTargetAudience.trim() || undefined,
+      participantsCount: editProjParticipantsCount.trim() || undefined,
+      executionLocations: editProjExecutionLocations.trim() || undefined
+    };
+
+    updateProject(updated);
+    setEditingProject(null);
+    showNotification('Iniciativa/Projeto atualizado com sucesso!');
   };
 
   const handleLoginSubmit = (e: FormEvent) => {
@@ -429,16 +675,16 @@ export default function AdminPanel({
       id: 'user-admin',
       username: 'admin',
       name: 'Administrador Principal',
-      password: 'admin123',
+      password: '241910',
       role: 'admin'
     };
 
     await onUpdateUser({
       ...adminUser,
-      password: 'admin123'
+      password: '241910'
     });
 
-    showNotification('A senha do usuário admin foi redefinida com sucesso para "admin123"!');
+    showNotification('A senha do usuário admin foi redefinida com sucesso para "241910"!');
     setShowResetAdminModal(false);
     setConfirmResetText('');
   };
@@ -520,17 +766,20 @@ export default function AdminPanel({
       return;
     }
 
+    const isImgFile = contaFileUrl ? (contaFileUrl.startsWith('data:image/') || contaFileUrl.includes('.jpg') || contaFileUrl.includes('.png')) : false;
     addRecord({
       type: contaType,
       title: contaTitle,
       year: Number(contaYear),
       description: contaDescription,
       date: contaDate.split('-').reverse().join('/'), // format as DD/MM/YYYY
-      amount: contaAmount ? Number(contaAmount) : undefined,
+      amount: contaAmount ? parseCurrencyBRL(contaAmount) : undefined,
       category: contaCategory,
       projectLinked: contaProjectLinked || undefined,
       fundingSource: contaFundingSource || undefined,
-      fileUrl: contaFileUrl || '#'
+      fileUrl: contaFileUrl || '#',
+      fileName: contaFileName || undefined,
+      fileType: isImgFile ? 'photo' : 'document'
     });
 
     // Reset Form
@@ -578,10 +827,16 @@ export default function AdminPanel({
       return;
     }
 
+    const parsedVal = parseCurrencyBRL(emendaAmount);
+    if (parsedVal <= 0) {
+      showNotification('Por favor, informe um valor de repasse válido.');
+      return;
+    }
+
     addEmenda({
       code: emendaCode.toUpperCase(),
       author: emendaAuthor,
-      amount: Number(emendaAmount),
+      amount: parsedVal,
       year: Number(emendaYear),
       description: emendaDescription,
       allocatedProjectId: emendaProjectLinked || undefined
@@ -602,25 +857,63 @@ export default function AdminPanel({
       return;
     }
 
+    const parsedIndicators = projIndicatorsStr
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        const parts = line.split('|');
+        return {
+          value: parts[0]?.trim() || '',
+          label: parts[1]?.trim() || ''
+        };
+      })
+      .filter(ind => ind.value && ind.label);
+
+    const parsedTags = projTags.split(',').map(t => t.trim()).filter(Boolean);
+    const parsedTerritories = projTerritories.split(',').map(t => t.trim()).filter(Boolean);
+
     addProject({
-      title: projTitle,
+      title: projTitle.trim(),
       type: projType,
+      category: projCategory.trim() || undefined,
       year: Number(projYear),
-      description: projDescription,
+      description: projDescription.trim(),
+      fullDescription: projFullDescription.trim() || undefined,
       status: projStatus,
-      impact: projImpact || undefined,
-      location: projLocation || undefined,
-      budget: projBudget ? Number(projBudget) : undefined,
-      emendaId: projEmendaId || undefined
+      impact: projImpact.trim() || undefined,
+      location: projLocation.trim() || undefined,
+      tags: parsedTags.length > 0 ? parsedTags : undefined,
+      territories: parsedTerritories.length > 0 ? parsedTerritories : undefined,
+      indicators: parsedIndicators.length > 0 ? parsedIndicators : undefined,
+      mainImage: projMainImage.trim() || undefined,
+      budget: projBudget ? parseCurrencyBRL(projBudget) : undefined,
+      emendaId: projEmendaId || undefined,
+      fundingSourceType: projFundingSourceType.trim() || undefined,
+      fundingInstrument: projFundingInstrument.trim() || undefined,
+      fundingOrgan: projFundingOrgan.trim() || undefined,
+      fundingAuthor: projFundingAuthor.trim() || undefined,
+      receivedAmount: projReceivedAmount ? parseCurrencyBRL(projReceivedAmount) : undefined,
+      provenExpenses: projProvenExpenses ? parseCurrencyBRL(projProvenExpenses) : undefined
     });
 
     setProjTitle('');
     setProjDescription('');
+    setProjFullDescription('');
     setProjImpact('');
     setProjLocation('');
+    setProjTags('');
+    setProjTerritories('');
+    setProjIndicatorsStr('');
+    setProjMainImage('');
     setProjBudget('');
+    setProjReceivedAmount('');
+    setProjProvenExpenses('');
+    setProjFundingInstrument('');
+    setProjFundingOrgan('');
+    setProjFundingAuthor('');
     setProjEmendaId('');
-    showNotification('Novo Projeto, Curso ou Evento criado com sucesso!');
+    showNotification('Novo Projeto cadastrado com sucesso!');
   };
 
   // Login Form Render
@@ -716,7 +1009,7 @@ export default function AdminPanel({
                   <h3 className="text-base font-bold text-slate-900">Restaurar Senha do Admin</h3>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed mb-4">
-                  Caso tenha perdido o acesso à conta de administrador, você pode redefinir a senha do usuário <strong className="text-slate-900">"admin"</strong> de volta para o padrão de fábrica: <strong className="text-emerald-700 font-mono">admin123</strong>.
+                  Caso tenha perdido o acesso à conta de administrador, você pode redefinir a senha do usuário <strong className="text-slate-900">"admin"</strong> de volta para o padrão: <strong className="text-emerald-700 font-mono">241910</strong>.
                 </p>
                 
                 <div>
@@ -920,17 +1213,13 @@ export default function AdminPanel({
 
                     <div>
                       <label className="block text-slate-500 font-bold mb-1.5">Valor Auditado (BRL) *</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 font-bold text-slate-400">R$</span>
-                        <input
-                          type="number"
-                          required
-                          placeholder="0.00"
-                          value={contaAmount}
-                          onChange={(e) => setContaAmount(e.target.value)}
-                          className="w-full pl-9 pr-3 p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        />
-                      </div>
+                      <CurrencyInput
+                        id="conta-amount-input"
+                        required
+                        value={contaAmount}
+                        onChange={setContaAmount}
+                        placeholder="Ex: 400.000,00 ou 400 mil"
+                      />
                     </div>
 
                     <div>
@@ -1456,17 +1745,13 @@ export default function AdminPanel({
 
                     <div>
                       <label className="block text-slate-500 font-bold mb-1.5">Valor do Repasse (BRL) *</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 font-bold text-slate-400">R$</span>
-                        <input
-                          type="number"
-                          required
-                          placeholder="0.00"
-                          value={emendaAmount}
-                          onChange={(e) => setEmendaAmount(e.target.value)}
-                          className="w-full pl-9 pr-3 p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        />
-                      </div>
+                      <CurrencyInput
+                        id="emenda-amount-input"
+                        required
+                        value={emendaAmount}
+                        onChange={setEmendaAmount}
+                        placeholder="Ex: 400.000,00 ou 400 mil"
+                      />
                     </div>
 
                     <div>
@@ -1529,7 +1814,7 @@ export default function AdminPanel({
                           <th className="px-4 py-3">Autor</th>
                           <th className="px-4 py-3 text-right">Valor Aporte</th>
                           <th className="px-4 py-3">Destinação</th>
-                          <th className="px-4 py-3 text-center">Remover</th>
+                          <th className="px-4 py-3 text-center">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1542,6 +1827,7 @@ export default function AdminPanel({
                                 <span className="block text-[9px] text-slate-400 font-normal">
                                   Exercício {e.year}
                                   {e.createdByUserName && ` • Criado por: ${e.createdByUserName}`}
+                                  {e.updatedByUserName && ` • Alterado por: ${e.updatedByUserName}`}
                                 </span>
                               </td>
                               <td className="px-4 py-3.5 font-medium">{e.author}</td>
@@ -1559,23 +1845,32 @@ export default function AdminPanel({
                               </td>
                               <td className="px-4 py-3.5 text-center">
                                 {loggedInUser?.role !== 'viewer' ? (
-                                  <button
-                                    onClick={() => {
-                                      setDeleteConfirm({
-                                        id: e.id,
-                                        title: e.code,
-                                        type: 'emenda',
-                                        onConfirm: () => {
-                                          deleteEmenda(e.id);
-                                          showNotification('Emenda excluída do sistema.');
-                                        }
-                                      });
-                                    }}
-                                    className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                                    title="Excluir Emenda"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      onClick={() => handleStartEditEmenda(e)}
+                                      className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                                      title="Editar Demanda / Emenda"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setDeleteConfirm({
+                                          id: e.id,
+                                          title: e.code,
+                                          type: 'emenda',
+                                          onConfirm: () => {
+                                            deleteEmenda(e.id);
+                                            showNotification('Emenda excluída do sistema.');
+                                          }
+                                        });
+                                      }}
+                                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                      title="Excluir Emenda"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
                                 ) : (
                                   <span className="text-[10px] text-slate-400 font-medium italic">Sem permissão</span>
                                 )}
@@ -1617,13 +1912,35 @@ export default function AdminPanel({
                   <form onSubmit={handleCreateProject} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     
                     <div className="sm:col-span-2">
-                      <label className="block text-slate-500 font-bold mb-1.5">Título do Projeto/Ação *</label>
+                      <label className="block text-slate-500 font-bold mb-1.5">Nome da Ação / Projeto / Curso *</label>
                       <input
                         type="text"
                         required
-                        placeholder="Ex: Torneio Comunitário de Karatê e Cidadania"
+                        placeholder="Ex: Sonhos da Juventude"
                         value={projTitle}
                         onChange={(e) => setProjTitle(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 font-semibold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5">Categoria Temática</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Formação / Juventude, Cultura, Educação"
+                        value={projCategory}
+                        onChange={(e) => setProjCategory(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5">Tags (separadas por vírgula)</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Fotografia, Audiovisual, Mídias Sociais"
+                        value={projTags}
+                        onChange={(e) => setProjTags(e.target.value)}
                         className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
@@ -1635,63 +1952,28 @@ export default function AdminPanel({
                         onChange={(e) => setProjType(e.target.value as ProjectType)}
                         className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                       >
-                        <option value="projeto">Projeto de Longo Prazo</option>
+                        <option value="projeto">Projeto Social / Formativo</option>
                         <option value="curso">Curso / Oficina Livre</option>
-                        <option value="evento">Evento Recreativo / Cultural</option>
+                        <option value="evento">Evento Cultural / Festival</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-slate-500 font-bold mb-1.5">Status Ativo *</label>
+                      <label className="block text-slate-500 font-bold mb-1.5">Status *</label>
                       <select
                         value={projStatus}
-                        onChange={(e) => setProjStatus(e.target.value as 'em_andamento' | 'concluido' | 'planejado')}
+                        onChange={(e) => setProjStatus(e.target.value as Project['status'])}
                         className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                       >
-                        <option value="em_andamento">Em Andamento</option>
+                        <option value="em_andamento">Em andamento</option>
                         <option value="concluido">Concluído</option>
-                        <option value="planejado">Planejado / Futuro</option>
+                        <option value="aprovado">Aprovado (Aguardando Recurso)</option>
+                        <option value="planejado">Planejado</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-slate-500 font-bold mb-1.5">Localização de Atendimento</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Comunidade da Providência, Centro RJ"
-                        value={projLocation}
-                        onChange={(e) => setProjLocation(e.target.value)}
-                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-500 font-bold mb-1.5">Métrica de Impacto Previsto/Realizado</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Atendimento de 120 crianças periféricas"
-                        value={projImpact}
-                        onChange={(e) => setProjImpact(e.target.value)}
-                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-500 font-bold mb-1.5">Orçamento Estimado (BRL)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 font-bold text-slate-400">R$</span>
-                        <input
-                          type="number"
-                          placeholder="0.00"
-                          value={projBudget}
-                          onChange={(e) => setProjBudget(e.target.value)}
-                          className="w-full pl-9 pr-3 p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-500 font-bold mb-1.5">Ano Fiscal</label>
+                      <label className="block text-slate-500 font-bold mb-1.5">Ano</label>
                       <input
                         type="number"
                         value={projYear}
@@ -1700,28 +1982,182 @@ export default function AdminPanel({
                       />
                     </div>
 
-                    <div className="sm:col-span-2">
-                      <label className="block text-slate-500 font-bold mb-1.5">Vinculado à Emenda Financiadora</label>
-                      <select
-                        value={projEmendaId}
-                        onChange={(e) => setProjEmendaId(e.target.value)}
-                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
-                      >
-                        <option value="">-- Deixar sem fomento vinculado --</option>
-                        {emendas.map(em => (
-                          <option key={em.id} value={em.id}>{em.code} - {em.author} (R$ {em.amount.toLocaleString()})</option>
-                        ))}
-                      </select>
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5">Localização / Cidades</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Niterói, São Gonçalo e Rio de Janeiro"
+                        value={projLocation}
+                        onChange={(e) => setProjLocation(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-slate-500 font-bold mb-1.5">Objetivos e Descrição Técnica</label>
+                      <label className="block text-slate-500 font-bold mb-1.5 flex items-center justify-between">
+                        <span>Foto Principal do Projeto (Capa / Destaque)</span>
+                        {projMainImage && (
+                          <button
+                            type="button"
+                            onClick={() => setProjMainImage('')}
+                            className="text-[10px] text-rose-600 hover:underline cursor-pointer"
+                          >
+                            Remover Foto
+                          </button>
+                        )}
+                      </label>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                        <div className="sm:col-span-4">
+                          <label className="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50/50 hover:bg-indigo-50 cursor-pointer text-xs font-bold text-indigo-900 transition-colors">
+                            <UploadCloud className="w-4 h-4 text-indigo-600" />
+                            <span>Upload da Foto</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={async (e) => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                try {
+                                  const dataUrl = await processImageFile(f);
+                                  setProjMainImage(dataUrl);
+                                  showNotification('Foto carregada e otimizada!');
+                                } catch (err: any) {
+                                  alert(err.message || 'Erro ao carregar imagem.');
+                                }
+                              }}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                        <div className="sm:col-span-8 flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="Ou informe URL da imagem (https://...)"
+                            value={projMainImage && !projMainImage.startsWith('data:') ? projMainImage : ''}
+                            onChange={(e) => setProjMainImage(e.target.value)}
+                            className="flex-1 p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                          {projMainImage && (
+                            <img src={projMainImage} alt="Prévia" className="w-9 h-9 object-cover rounded-lg border border-slate-200 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-slate-500 font-bold mb-1.5">Resumo Curto (3 a 4 linhas para os cards)</label>
                       <textarea
-                        rows={3}
-                        placeholder="Descreva detalhadamente a finalidade deste projeto..."
+                        rows={2}
+                        placeholder="Resumo conciso de até 3 ou 4 linhas para exibição no card do projeto..."
                         value={projDescription}
                         onChange={(e) => setProjDescription(e.target.value)}
                         className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-slate-500 font-bold mb-1.5">Descrição Completa (para a página individual do projeto)</label>
+                      <textarea
+                        rows={4}
+                        placeholder="Detalhamento integral dos objetivos, métodos, beneficiários e impacto social..."
+                        value={projFullDescription}
+                        onChange={(e) => setProjFullDescription(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-slate-500 font-bold mb-1.5">Indicadores Reais de Impacto (um por linha no formato: Valor | Rótulo)</label>
+                      <textarea
+                        rows={3}
+                        placeholder={"+1.290 | Participantes\n+40 | Oficinas e debates\n+240h | Atividades\n3 | Municípios\n8 | Localidades"}
+                        value={projIndicatorsStr}
+                        onChange={(e) => setProjIndicatorsStr(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                      <span className="text-[10px] text-slate-400 mt-1 block">Insira cada métrica com valor e rótulo separados por uma barra vertical (|)</span>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-slate-500 font-bold mb-1.5">Territórios e Localidades Atendidas (separados por vírgula)</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Niterói (Morro do Estado), São Gonçalo (Complexo do Salgueiro), Rio de Janeiro (Madureira)"
+                        value={projTerritories}
+                        onChange={(e) => setProjTerritories(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    {/* Transparência e Financiamento */}
+                    <div className="sm:col-span-2 pt-3 border-t border-slate-200/80">
+                      <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-2">Transparência e Financiamento</h4>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5">Fonte do Recurso</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Emenda Parlamentar, Recurso Próprio, Edital, Convênio"
+                        value={projFundingSourceType}
+                        onChange={(e) => setProjFundingSourceType(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5">Instrumento / Identificação</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: EMENDA-2022-382, Edital 01/2023"
+                        value={projFundingInstrument}
+                        onChange={(e) => setProjFundingInstrument(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5">Órgão Responsável pelo Repasse</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Ministério da Educação, Governo do Estado do RJ"
+                        value={projFundingOrgan}
+                        onChange={(e) => setProjFundingOrgan(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5">Autor da Emenda (quando houver)</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Deputado Estadual André Silva"
+                        value={projFundingAuthor}
+                        onChange={(e) => setProjFundingAuthor(e.target.value)}
+                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5">Recurso Recebido (R$)</label>
+                      <CurrencyInput
+                        id="proj-received-input"
+                        value={projReceivedAmount}
+                        onChange={setProjReceivedAmount}
+                        placeholder="Ex: 150.000,00"
+                        showQuickChips={false}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 font-bold mb-1.5">Despesas Comprovadas (R$)</label>
+                      <CurrencyInput
+                        id="proj-proven-input"
+                        value={projProvenExpenses}
+                        onChange={setProjProvenExpenses}
+                        placeholder="Ex: 150.000,00"
+                        showQuickChips={false}
                       />
                     </div>
 
@@ -1744,51 +2180,121 @@ export default function AdminPanel({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {projects.map((p) => {
                       const fund = emendas.find(e => e.id === p.emendaId);
+                      const projRecords = records.filter(r => r.projectLinked === p.id);
+                      const projPhotos = projRecords.filter(r => 
+                        r.fileType === 'photo' || 
+                        (r.fileUrl && (r.fileUrl.startsWith('data:image/') || r.fileUrl.includes('.jpg') || r.fileUrl.includes('.png') || r.fileUrl.includes('.jpeg') || r.fileUrl.includes('.webp')))
+                      );
+                      const projDocs = projRecords.filter(r => !projPhotos.includes(r));
+
                       return (
-                        <div key={p.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50/50 flex justify-between items-start">
-                          <div>
-                            <div className="flex gap-1.5 items-center">
-                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-900 text-[9px] font-bold rounded capitalize">
-                                {p.type}
-                              </span>
-                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded ${
-                                p.status === 'concluido' ? 'bg-emerald-100 text-emerald-800' :
-                                p.status === 'em_andamento' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'
-                              }`}>
-                                {p.status === 'concluido' ? 'Concluído' : p.status === 'em_andamento' ? 'Em Execução' : 'Planejado'}
-                              </span>
-                            </div>
-                            <h4 className="font-bold text-slate-900 text-xs sm:text-sm mt-1.5">{p.title}</h4>
-                            <p className="text-[10px] text-slate-400 mt-1">
-                              Ano: {p.year} • {p.location || 'Sem local'}
-                              {p.createdByUserName && ` • Criado por: ${p.createdByUserName}`}
-                            </p>
-                            
-                            {fund && (
-                              <p className="text-[10px] font-mono text-indigo-900 font-bold mt-1.5">
-                                🏛️ Financiador: {fund.code} ({fund.author})
+                        <div key={p.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50/50 flex flex-col justify-between">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex gap-1.5 items-center">
+                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-900 text-[9px] font-bold rounded capitalize">
+                                  {p.type}
+                                </span>
+                                <span className={`px-2 py-0.5 text-[9px] font-bold rounded ${
+                                  p.status === 'concluido' ? 'bg-emerald-100 text-emerald-800' :
+                                  p.status === 'em_andamento' ? 'bg-amber-100 text-amber-800' :
+                                  p.status === 'aprovado' ? 'bg-blue-100 text-blue-800 border border-blue-200' : 'bg-slate-100 text-slate-500'
+                                }`}>
+                                  {p.status === 'concluido' ? 'Concluído' :
+                                   p.status === 'em_andamento' ? 'Em Execução' :
+                                   p.status === 'aprovado' ? 'Aprovado (Aguardando Recurso)' : 'Planejado'}
+                                </span>
+                              </div>
+                              <h4 className="font-bold text-slate-900 text-xs sm:text-sm mt-1.5">{p.title}</h4>
+                              {p.status === 'aprovado' && (
+                                <p className="text-[10px] text-blue-700 bg-blue-50/70 border border-blue-100 rounded px-2 py-0.5 mt-1 font-medium">
+                                  ⏳ Aprovado • Aguardando repasse do valor financeiro
+                                </p>
+                              )}
+                              <p className="text-[10px] text-slate-400 mt-1">
+                                Ano: {p.year} • {p.location || 'Sem local'}
+                                {p.createdByUserName && ` • Criado por: ${p.createdByUserName}`}
+                                {p.updatedByUserName && ` • Alterado por: ${p.updatedByUserName}`}
                               </p>
+                              
+                              {fund && (
+                                <p className="text-[10px] font-mono text-indigo-900 font-bold mt-1.5">
+                                  🏛️ Financiador: {fund.code} ({fund.author})
+                                </p>
+                              )}
+                            </div>
+                            {loggedInUser?.role !== 'viewer' && (
+                              <div className="flex items-center gap-1 shrink-0 ml-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setProjectToManageImages(p)}
+                                  className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-colors cursor-pointer"
+                                  title="Adicionar, alterar ou excluir imagens deste projeto"
+                                >
+                                  <ImageIcon className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleStartEditProject(p)}
+                                  className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                                  title="Editar Iniciativa / Projeto"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setDeleteConfirm({
+                                      id: p.id,
+                                      title: p.title,
+                                      type: 'project',
+                                      onConfirm: () => {
+                                        deleteProject(p.id);
+                                        showNotification('Iniciativa excluída do sistema.');
+                                      }
+                                    });
+                                  }}
+                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                  title="Excluir Iniciativa"
+                                >
+                                  <Trash2 className="w-4.5 h-4.5" />
+                                </button>
+                              </div>
                             )}
                           </div>
-                          {loggedInUser?.role !== 'viewer' && (
-                            <button
-                              onClick={() => {
-                                setDeleteConfirm({
-                                  id: p.id,
-                                  title: p.title,
-                                  type: 'project',
-                                  onConfirm: () => {
-                                    deleteProject(p.id);
-                                    showNotification('Iniciativa excluída do sistema.');
-                                  }
-                                });
-                              }}
-                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                              title="Excluir Iniciativa"
-                            >
-                              <Trash2 className="w-4.5 h-4.5" />
-                            </button>
-                          )}
+
+                          {/* Direct project files management button and pills */}
+                          <div className="mt-3 pt-3 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
+                              <span className="flex items-center gap-1 bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200/60">
+                                <ImageIcon className="w-3 h-3 text-amber-600" />
+                                {(p.gallery?.length || 0) + (p.mainImage ? 1 : 0)} fotos
+                              </span>
+                              <span className="flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100/50">
+                                <FileText className="w-3 h-3 text-emerald-600" />
+                                {projDocs.length} docs
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setProjectToManageImages(p)}
+                                className="text-[11px] font-bold text-amber-800 hover:text-white bg-amber-50 hover:bg-amber-600 border border-amber-200 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                title="Adicionar, alterar e excluir imagens deste projeto individual"
+                              >
+                                <ImageIcon className="w-3.5 h-3.5" />
+                                Gerenciar Imagens
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setProjectToManageFiles(p)}
+                                className="text-[11px] font-bold text-indigo-700 hover:text-white bg-indigo-50 hover:bg-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                title="Cadastrar ou gerenciar fotos e documentos deste projeto"
+                              >
+                                <UploadCloud className="w-3.5 h-3.5" />
+                                Anexar Fotos / Docs
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -2271,13 +2777,12 @@ export default function AdminPanel({
 
                     <div>
                       <label className="block text-slate-500 font-bold mb-1">Valor do Lançamento (BRL)</label>
-                      <input
-                        type="number"
-                        step="0.01"
+                      <CurrencyInput
+                        id="edit-amount-input"
                         value={editAmount}
-                        onChange={(e) => setEditAmount(e.target.value)}
-                        className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                        placeholder="0.00"
+                        onChange={setEditAmount}
+                        placeholder="Ex: 400.000,00 ou 400 mil"
+                        showQuickChips={false}
                       />
                     </div>
                   </div>
@@ -2310,6 +2815,25 @@ export default function AdminPanel({
                         ))}
                       </select>
                     </div>
+
+                    {editProjectLinked && (
+                      <div className="sm:col-span-2">
+                        <label className="block text-slate-500 font-bold mb-1">
+                          Categoria em "Documentos e Comprovantes Vinculados"
+                        </label>
+                        <select
+                          value={editDocCategory || 'notas_fiscais'}
+                          onChange={(e) => setEditDocCategory(e.target.value as RecordDocCategory)}
+                          className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                        >
+                          <option value="notas_fiscais">🧾 Notas fiscais e comprovantes</option>
+                          <option value="prestacao_contas">📊 Prestação de contas</option>
+                          <option value="relatorios">📄 Relatórios de atividades</option>
+                          <option value="termos_parceria">📑 Termos / Parcerias</option>
+                          <option value="outros">📷 Outros documentos / Fotos</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -2329,6 +2853,685 @@ export default function AdminPanel({
                 <button
                   type="button"
                   onClick={() => setEditingRecord(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-900 hover:bg-indigo-950 rounded-lg transition-colors cursor-pointer"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Emenda (Demanda) Modal */}
+      {editingEmenda && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-100 overflow-hidden my-8 transform transition-all animate-in fade-in zoom-in-95 duration-150">
+            
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-indigo-950 text-white">
+              <div className="flex items-center gap-2">
+                <Edit className="w-5 h-5 text-indigo-300" />
+                <div>
+                  <h3 className="text-sm font-bold">Editar Demanda / Emenda Parlamentar</h3>
+                  <p className="text-[10px] text-indigo-200">ID: {editingEmenda.id}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingEmenda(null)}
+                className="p-1 rounded-lg hover:bg-indigo-900 transition-colors text-indigo-200 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditEmenda} className="p-6 space-y-4 text-xs">
+              
+              <div>
+                <label className="block text-slate-500 font-bold mb-1">Código / Identificador da Emenda *</label>
+                <input
+                  type="text"
+                  required
+                  value={editEmendaCode}
+                  onChange={(e) => setEditEmendaCode(e.target.value)}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-slate-800"
+                  placeholder="Ex: EMENDA-2024-045"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-500 font-bold mb-1">Parlamentar / Autoridade Proponente *</label>
+                <input
+                  type="text"
+                  required
+                  value={editEmendaAuthor}
+                  onChange={(e) => setEditEmendaAuthor(e.target.value)}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
+                  placeholder="Ex: Dep. Federal Fulano de Tal"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">Valor do Aporte (R$) *</label>
+                  <CurrencyInput
+                    id="edit-emenda-amount-input"
+                    required
+                    value={editEmendaAmount}
+                    onChange={setEditEmendaAmount}
+                    placeholder="Ex: 400.000,00 ou 400 mil"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">Ano do Exercício / Repasse *</label>
+                  <input
+                    type="number"
+                    required
+                    value={editEmendaYear}
+                    onChange={(e) => setEditEmendaYear(Number(e.target.value))}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-500 font-bold mb-1">Vincular Diretamente ao Projeto do IFPP</label>
+                <select
+                  value={editEmendaProjectLinked}
+                  onChange={(e) => setEditEmendaProjectLinked(e.target.value)}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white text-slate-800"
+                >
+                  <option value="">-- Deixar sem vínculo por enquanto --</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.title} ({p.year})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-500 font-bold mb-1">Ementa de Destinação / Descrição</label>
+                <textarea
+                  rows={3}
+                  value={editEmendaDescription}
+                  onChange={(e) => setEditEmendaDescription(e.target.value)}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
+                  placeholder="Ex: Apoio à melhoria de infraestrutura educativa e oficinas..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingEmenda(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-900 hover:bg-indigo-950 rounded-lg transition-colors cursor-pointer"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Project (Iniciativa/Curso) Modal */}
+      {editingProject && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8 transform transition-all animate-in fade-in zoom-in-95 duration-150">
+            
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-indigo-950 text-white">
+              <div className="flex items-center gap-2">
+                <Edit className="w-5 h-5 text-indigo-300" />
+                <div>
+                  <h3 className="text-sm font-bold">Editar Projeto / Iniciativa</h3>
+                  <p className="text-[10px] text-indigo-200">ID: {editingProject.id}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingProject(null)}
+                className="p-1 rounded-lg hover:bg-indigo-900 transition-colors text-indigo-200 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditProject} className="p-6 space-y-4 text-xs max-h-[80vh] overflow-y-auto">
+              
+              <div>
+                <label className="block text-slate-500 font-bold mb-1">Nome da Ação / Projeto *</label>
+                <input
+                  type="text"
+                  required
+                  value={editProjTitle}
+                  onChange={(e) => setEditProjTitle(e.target.value)}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">Categoria Temática</label>
+                  <input
+                    type="text"
+                    value={editProjCategory}
+                    onChange={(e) => setEditProjCategory(e.target.value)}
+                    placeholder="Ex: Formação / Juventude"
+                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">Tags (separadas por vírgula)</label>
+                  <input
+                    type="text"
+                    value={editProjTags}
+                    onChange={(e) => setEditProjTags(e.target.value)}
+                    placeholder="Fotografia, Audiovisual, Mídias Sociais"
+                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">Tipo *</label>
+                  <select
+                    value={editProjType}
+                    onChange={(e) => setEditProjType(e.target.value as ProjectType)}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="projeto">Projeto Social</option>
+                    <option value="curso">Curso / Oficina</option>
+                    <option value="evento">Evento Cultural</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">Ano *</label>
+                  <input
+                    type="number"
+                    required
+                    value={editProjYear}
+                    onChange={(e) => setEditProjYear(Number(e.target.value))}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">Status *</label>
+                  <select
+                    value={editProjStatus}
+                    onChange={(e) => setEditProjStatus(e.target.value as Project['status'])}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="em_andamento">Em andamento</option>
+                    <option value="concluido">Concluído</option>
+                    <option value="aprovado">Aprovado (Aguardando Recurso)</option>
+                    <option value="planejado">Planejado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">Localização</label>
+                  <input
+                    type="text"
+                    value={editProjLocation}
+                    onChange={(e) => setEditProjLocation(e.target.value)}
+                    placeholder="Ex: Niterói, São Gonçalo e Rio de Janeiro"
+                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-slate-700 font-bold text-xs flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-indigo-600" />
+                      Foto Principal (Capa / Destaque)
+                    </label>
+                    {editProjMainImage && (
+                      <button
+                        type="button"
+                        onClick={() => setEditProjMainImage('')}
+                        className="text-[10px] text-rose-600 font-semibold hover:underline cursor-pointer"
+                      >
+                        Excluir Foto Principal
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                    <div className="sm:col-span-4">
+                      {editProjMainImage ? (
+                        <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                          <img src={editProjMainImage} alt="Foto Principal" className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="aspect-video rounded-xl border-2 border-dashed border-slate-200 bg-white flex flex-col items-center justify-center text-slate-400 text-center p-2">
+                          <ImageIcon className="w-6 h-6 mb-1 opacity-50" />
+                          <span className="text-[10px]">Sem Foto</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="sm:col-span-8 space-y-2">
+                      <label className="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-indigo-300 hover:border-indigo-500 bg-white hover:bg-indigo-50/50 cursor-pointer font-bold text-indigo-900 text-xs transition-colors">
+                        <UploadCloud className="w-4 h-4 text-indigo-600" />
+                        <span>Upload Nova Foto Principal</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            try {
+                              const dataUrl = await processImageFile(f);
+                              setEditProjMainImage(dataUrl);
+                              showNotification('Foto principal carregada e otimizada!');
+                            } catch (err: any) {
+                              alert(err.message || 'Erro ao carregar foto.');
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                      <input
+                        type="text"
+                        value={editProjMainImage && !editProjMainImage.startsWith('data:') ? editProjMainImage : ''}
+                        onChange={(e) => setEditProjMainImage(e.target.value)}
+                        placeholder="Ou informe URL da imagem (https://...)"
+                        className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Galeria de Fotos do Projeto dentro do modal de edição */}
+                <div className="sm:col-span-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-slate-700 font-bold text-xs flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-amber-600" />
+                      Galeria de Fotos ({editProjGallery.length} {editProjGallery.length === 1 ? 'foto' : 'fotos'})
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {editProjGallery.map((img, i) => (
+                      <div key={i} className="relative aspect-video rounded-lg overflow-hidden border border-slate-200 bg-slate-100 group">
+                        <img src={img} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setEditProjGallery(prev => prev.filter((_, idx) => idx !== i))}
+                          className="absolute top-1 right-1 p-1 bg-rose-600/90 hover:bg-rose-700 text-white rounded shadow-sm opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          title="Excluir da Galeria"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-200/60 items-center">
+                    <label className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 hover:border-indigo-500 bg-white cursor-pointer font-bold text-slate-700 text-xs shadow-xs">
+                      <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Upload de Foto para Galeria</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          try {
+                            const dataUrl = await processImageFile(f);
+                            setEditProjGallery(prev => [...prev, dataUrl]);
+                            showNotification('Foto adicionada à galeria!');
+                          } catch (err: any) {
+                            alert(err.message || 'Erro ao processar foto.');
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <div className="flex-1 flex gap-2 w-full">
+                      <input
+                        type="text"
+                        value={newEditGalleryUrl}
+                        onChange={(e) => setNewEditGalleryUrl(e.target.value)}
+                        placeholder="Ou cole a URL da foto..."
+                        className="flex-1 p-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newEditGalleryUrl.trim()) return;
+                          setEditProjGallery(prev => [...prev, newEditGalleryUrl.trim()]);
+                          setNewEditGalleryUrl('');
+                          showNotification('Foto adicionada à galeria!');
+                        }}
+                        disabled={!newEditGalleryUrl.trim()}
+                        className="px-3 py-2 bg-indigo-900 text-white text-xs font-bold rounded-lg disabled:opacity-50 cursor-pointer"
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-500 font-bold mb-1">Resumo Curto (3 a 4 linhas para os cards)</label>
+                <textarea
+                  rows={2}
+                  value={editProjDesc}
+                  onChange={(e) => setEditProjDesc(e.target.value)}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="Resumo de no máximo 3 ou 4 linhas..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-500 font-bold mb-1">Descrição Completa (para a página individual)</label>
+                <textarea
+                  rows={4}
+                  value={editProjFullDesc}
+                  onChange={(e) => setEditProjFullDesc(e.target.value)}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="Detalhamento completo do projeto..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-500 font-bold mb-1">Indicadores Reais de Impacto (um por linha no formato: Valor | Rótulo)</label>
+                <textarea
+                  rows={3}
+                  value={editProjIndicatorsStr}
+                  onChange={(e) => setEditProjIndicatorsStr(e.target.value)}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder={"+1.290 | Participantes\n+40 | Oficinas e debates\n3 | Municípios"}
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-500 font-bold mb-1">Territórios e Localidades Atendidas</label>
+                <input
+                  type="text"
+                  value={editProjTerritories}
+                  onChange={(e) => setEditProjTerritories(e.target.value)}
+                  placeholder="Niterói (Morro do Estado), São Gonçalo..."
+                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Transparência e Prestação de Contas */}
+              <div className="pt-3 border-t border-slate-200">
+                <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-2">Transferegov e Formalização da Proposta</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Nº Proposta Transferegov</label>
+                    <input
+                      type="text"
+                      value={editProjProposalNumber}
+                      onChange={(e) => setEditProjProposalNumber(e.target.value)}
+                      placeholder="Ex: 010962/2026 ou 029397/2026"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Programa</label>
+                    <input
+                      type="text"
+                      value={editProjProgramName}
+                      onChange={(e) => setEditProjProgramName(e.target.value)}
+                      placeholder="Ex: Fomento à Cultura, Esporte e Lazer"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-slate-500 font-bold mb-1">Objeto Oficial da Proposta</label>
+                    <textarea
+                      rows={2}
+                      value={editProjOfficialObject}
+                      onChange={(e) => setEditProjOfficialObject(e.target.value)}
+                      placeholder="Descrição oficial do objeto cadastrado no Transferegov..."
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Órgão Concedente</label>
+                    <input
+                      type="text"
+                      value={editProjGrantingOrgan}
+                      onChange={(e) => setEditProjGrantingOrgan(e.target.value)}
+                      placeholder="Ex: Ministério do Esporte, Ministério da Cultura"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Nº do Processo</label>
+                    <input
+                      type="text"
+                      value={editProjProcessNumber}
+                      onChange={(e) => setEditProjProcessNumber(e.target.value)}
+                      placeholder="Ex: 71000.012345/2026-00"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Nº da Emenda</label>
+                    <input
+                      type="text"
+                      value={editProjEmendaNumber}
+                      onChange={(e) => setEditProjEmendaNumber(e.target.value)}
+                      placeholder="Ex: 50040001"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Autor / Indicação Parlamentar</label>
+                    <input
+                      type="text"
+                      value={editProjAuthorIndication}
+                      onChange={(e) => setEditProjAuthorIndication(e.target.value)}
+                      placeholder="Ex: Comissão de Cultura (Indicação 22891)"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Valor Global (R$)</label>
+                    <CurrencyInput
+                      id="edit-proj-global-value"
+                      value={editProjGlobalValue}
+                      onChange={setEditProjGlobalValue}
+                      placeholder="Ex: 530.000,00"
+                      showQuickChips={false}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Valor de Repasse (R$)</label>
+                    <CurrencyInput
+                      id="edit-proj-transfer-value"
+                      value={editProjTransferValue}
+                      onChange={setEditProjTransferValue}
+                      placeholder="Ex: 530.000,00"
+                      showQuickChips={false}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Contrapartida (R$)</label>
+                    <CurrencyInput
+                      id="edit-proj-counterpart-value"
+                      value={editProjCounterpartValue}
+                      onChange={setEditProjCounterpartValue}
+                      placeholder="Ex: 0,00"
+                      showQuickChips={false}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Nº do Instrumento / Termo</label>
+                    <input
+                      type="text"
+                      value={editProjInstrumentNumber}
+                      onChange={(e) => setEditProjInstrumentNumber(e.target.value)}
+                      placeholder="Ex: Termo de Fomento nº 912345/2026"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Detalhamento Operacional */}
+              <div className="pt-3 border-t border-slate-200">
+                <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-2">Metas, Público e Territórios</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-slate-500 font-bold mb-1">Objetivos e Metas Oficiais</label>
+                    <textarea
+                      rows={3}
+                      value={editProjGoalsAndObjectives}
+                      onChange={(e) => setEditProjGoalsAndObjectives(e.target.value)}
+                      placeholder="Metas quantitativas e qualitativas da iniciativa..."
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Público Beneficiário</label>
+                    <input
+                      type="text"
+                      value={editProjTargetAudience}
+                      onChange={(e) => setEditProjTargetAudience(e.target.value)}
+                      placeholder="Ex: Crianças, adolescentes e jovens..."
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Número de Participantes Previstos</label>
+                    <input
+                      type="text"
+                      value={editProjParticipantsCount}
+                      onChange={(e) => setEditProjParticipantsCount(e.target.value)}
+                      placeholder="Ex: 200 crianças e jovens"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-slate-500 font-bold mb-1">Municípios e Locais Específicos de Execução</label>
+                    <input
+                      type="text"
+                      value={editProjExecutionLocations}
+                      onChange={(e) => setEditProjExecutionLocations(e.target.value)}
+                      placeholder="Ex: Petrópolis – RJ, Rio de Janeiro – RJ (Polos territoriais)"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Transparência e Financiamento Clássico */}
+              <div className="pt-3 border-t border-slate-200">
+                <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-2">Execução Financeira Direta</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Fonte do Recurso</label>
+                    <input
+                      type="text"
+                      value={editProjFundingSourceType}
+                      onChange={(e) => setEditProjFundingSourceType(e.target.value)}
+                      placeholder="Emenda Parlamentar, Edital, etc."
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Instrumento / Identificação</label>
+                    <input
+                      type="text"
+                      value={editProjFundingInstrument}
+                      onChange={(e) => setEditProjFundingInstrument(e.target.value)}
+                      placeholder="EMENDA-2022-382"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Órgão Concedente</label>
+                    <input
+                      type="text"
+                      value={editProjFundingOrgan}
+                      onChange={(e) => setEditProjFundingOrgan(e.target.value)}
+                      placeholder="Ministério da Educação, Governo do RJ"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Autor da Emenda</label>
+                    <input
+                      type="text"
+                      value={editProjFundingAuthor}
+                      onChange={(e) => setEditProjFundingAuthor(e.target.value)}
+                      placeholder="Deputado Estadual..."
+                      className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Recurso Recebido (R$)</label>
+                    <CurrencyInput
+                      id="edit-proj-received-input"
+                      value={editProjReceivedAmount}
+                      onChange={setEditProjReceivedAmount}
+                      placeholder="Ex: 150.000,00"
+                      showQuickChips={false}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1">Despesas Comprovadas (R$)</label>
+                    <CurrencyInput
+                      id="edit-proj-proven-input"
+                      value={editProjProvenExpenses}
+                      onChange={setEditProjProvenExpenses}
+                      placeholder="Ex: 150.000,00"
+                      showQuickChips={false}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingProject(null)}
                   className="px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   Cancelar
@@ -2595,6 +3798,45 @@ Guarde estas informações com segurança e não as compartilhe com ninguém.`;
             </div>
           </div>
         </div>
+      )}
+
+      {/* Project Files & Photos Manager Modal */}
+      {projectToManageFiles && (
+        <ProjectFilesModal
+          isOpen={!!projectToManageFiles}
+          onClose={() => setProjectToManageFiles(null)}
+          projects={projects}
+          initialProjectId={projectToManageFiles.id}
+          records={records}
+          onAddRecord={(rec) => {
+            addRecord(rec);
+            showNotification('Arquivo ou Foto cadastrado com sucesso para o projeto!');
+          }}
+          onUpdateRecord={(rec) => {
+            updateRecord(rec);
+            showNotification('Arquivo ou Foto do projeto atualizado com sucesso!');
+          }}
+          onDeleteRecord={(recId) => {
+            deleteRecord(recId);
+            showNotification('Arquivo/Foto excluído com sucesso.');
+          }}
+          isAdminLoggedIn={isAdminLoggedIn}
+          onLogin={onLogin}
+        />
+      )}
+
+      {/* Project Images Manager Modal (Adicionar, alterar e excluir imagens de cada projeto individual) */}
+      {projectToManageImages && (
+        <ProjectImagesModal
+          isOpen={!!projectToManageImages}
+          onClose={() => setProjectToManageImages(null)}
+          project={projectToManageImages}
+          onSaveProject={(updatedProj) => {
+            updateProject(updatedProj);
+            setProjectToManageImages(null);
+            showNotification('Imagens do projeto atualizadas com sucesso!');
+          }}
+        />
       )}
     </div>
   );

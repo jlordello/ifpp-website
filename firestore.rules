@@ -16,5 +16,8 @@ service cloud.firestore {
     match /file_chunks/{document} {
       allow read, write: if true;
     }
+    match /test/{document} {
+      allow read, write: if true;
+    }
   }
 }

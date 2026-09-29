@@ -4,7 +4,8 @@ import { reconstructFileUrl } from '../lib/firebase';
 import { 
   ArrowLeft, Calendar, MapPin, Users, Sparkles, CheckCircle2, 
   Clock, Image as ImageIcon, FileText, Download, Eye, ExternalLink, 
-  Landmark, DollarSign, X, ChevronRight, Layers, Tag, Info, ArrowUpRight
+  Landmark, DollarSign, X, ChevronRight, Layers, Tag, Info, ArrowUpRight,
+  Trash2
 } from 'lucide-react';
 
 interface ProjectsTabProps {
@@ -14,6 +15,9 @@ interface ProjectsTabProps {
   initialSelectedProjectId?: string | null;
   onSelectProject?: (projectId: string | null) => void;
   onNavigateToTransparency?: (projectId?: string) => void;
+  isAdminLoggedIn?: boolean;
+  onUpdateProject?: (project: Project) => void;
+  onDeleteProject?: (id: string) => void;
 }
 
 export default function ProjectsTab({ 
@@ -21,7 +25,10 @@ export default function ProjectsTab({
   emendas, 
   records,
   initialSelectedProjectId,
-  onSelectProject
+  onSelectProject,
+  isAdminLoggedIn,
+  onUpdateProject,
+  onDeleteProject
 }: ProjectsTabProps) {
   // Current active project ID for single page view
   const [activeProjectId, setActiveProjectId] = useState<string | null>(initialSelectedProjectId || null);
@@ -120,14 +127,12 @@ export default function ProjectsTab({
     return projectRecords;
   }, [projectRecords]);
 
-  // Gallery images combined from project.gallery and uploaded photo records
+  // Gallery images from project.gallery and uploaded photo records
   const allGalleryImages = useMemo(() => {
     if (!currentProject) return [];
     const list: string[] = [];
     if (currentProject.gallery && currentProject.gallery.length > 0) {
       list.push(...currentProject.gallery);
-    } else if (currentProject.mainImage) {
-      list.push(currentProject.mainImage);
     }
     projectPhotos.forEach(r => {
       if (r.fileUrl && !list.includes(r.fileUrl) && r.fileUrl !== '#') {
@@ -335,7 +340,7 @@ export default function ProjectsTab({
         <div className="max-w-5xl mx-auto space-y-10">
           
           {/* Top Return Navigation Bar */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <button
               onClick={() => selectProject(null)}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-indigo-950 hover:bg-slate-100 font-semibold text-xs sm:text-sm shadow-xs transition-all cursor-pointer"
@@ -343,8 +348,26 @@ export default function ProjectsTab({
               <ArrowLeft className="w-4 h-4 text-indigo-700" />
               Voltar para Projetos
             </button>
-            <div className="text-xs text-slate-400 font-medium">
-              IFPP • Nossas Ações
+            <div className="flex items-center gap-3">
+              {isAdminLoggedIn && onDeleteProject && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`Deseja realmente excluir a iniciativa "${currentProject.title}"? Esta ação removerá o projeto do portal.`)) {
+                      onDeleteProject(currentProject.id);
+                      selectProject(null);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  title="Excluir Iniciativa"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir Iniciativa</span>
+                </button>
+              )}
+              <div className="text-xs text-slate-400 font-medium hidden sm:block">
+                IFPP • Nossas Ações
+              </div>
             </div>
           </div>
 
@@ -610,22 +633,45 @@ export default function ProjectsTab({
             {allGalleryImages.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                 {allGalleryImages.map((imgUrl, idx) => (
-                  <button
+                  <div
                     key={idx}
-                    type="button"
-                    onClick={() => setLightboxImage(imgUrl)}
-                    className="group relative aspect-4/3 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/70 hover:opacity-95 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="group relative aspect-4/3 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/70 hover:opacity-95 transition-all shadow-xs"
                   >
-                    <img 
-                      src={imgUrl} 
-                      alt={`Registro fotográfico ${idx + 1}`} 
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                      <Eye className="w-6 h-6 drop-shadow-md" />
-                    </div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setLightboxImage(imgUrl)}
+                      className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 text-left"
+                    >
+                      <img 
+                        src={imgUrl} 
+                        alt={`Registro fotográfico ${idx + 1}`} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                        <Eye className="w-6 h-6 drop-shadow-md" />
+                      </div>
+                    </button>
+                    {isAdminLoggedIn && onUpdateProject && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm("Deseja realmente excluir esta foto da galeria?")) {
+                            const nextGallery = (currentProject.gallery || []).filter(u => u !== imgUrl);
+                            onUpdateProject({
+                              ...currentProject,
+                              gallery: nextGallery
+                            });
+                          }
+                        }}
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-700 text-white shadow-md z-20 transition-all cursor-pointer opacity-90 sm:opacity-0 group-hover:opacity-100"
+                        title="Excluir foto da galeria"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (

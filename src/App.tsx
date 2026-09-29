@@ -18,7 +18,10 @@ import {
   removeEmenda,
   initialUsers,
   saveUser,
-  removeUser
+  removeUser,
+  getDeletedProjectIds,
+  addDeletedProjectId,
+  markProjectAsDeleted
 } from './lib/firebase';
 
 export default function App() {
@@ -57,27 +60,36 @@ export default function App() {
   // 4. Online Database Synchronization Effects
   useEffect(() => {
     // Sync records collection
-    const unsubscribeRecords = syncCollection<TransparencyRecord>('records', setRecords, initialRecords);
+    const unsubscribeRecords = syncCollection<TransparencyRecord>('records', (dbRecords) => {
+      // Check if any tombstones exist in records collection
+      dbRecords.forEach((r: any) => {
+        if (r.type === 'tombstone_project' && r.projectId) {
+          addDeletedProjectId(r.projectId);
+        }
+      });
+      // Filter out internal tombstones from standard transparency records
+      const cleanRecords = dbRecords.filter((r: any) => r.type !== 'tombstone_project');
+      setRecords(cleanRecords);
+    }, initialRecords);
+
     // Sync projects collection
     const obsoleteDemoIds = ['hip-hop-funk-2023', 'capacitacao-politicas-2024'];
     const unsubscribeProjects = syncCollection<Project>('projects', (dbProjects) => {
-      // Filter out obsolete demo projects and guarantee the official real projects are present
-      const cleaned = dbProjects.filter(p => !obsoleteDemoIds.includes(p.id));
+      const deletedIds = getDeletedProjectIds();
+      // Filter out obsolete demo projects and deleted projects
+      const cleaned = dbProjects.filter(p => !obsoleteDemoIds.includes(p.id) && !deletedIds.includes(p.id));
       const merged = [...cleaned];
       initialProjects.forEach(initP => {
+        // If this initial project was deleted by the user, never re-add it!
+        if (deletedIds.includes(initP.id)) return;
         const existingIdx = merged.findIndex(p => p.id === initP.id);
         if (existingIdx === -1) {
           merged.push(initP);
-        } else {
-          // Keep rich data from initialProjects if Firestore has partial old version
-          merged[existingIdx] = {
-            ...initP,
-            ...merged[existingIdx]
-          };
         }
       });
       setProjects(merged);
     }, initialProjects);
+
     // Sync emendas collection
     const unsubscribeEmendas = syncCollection<Emenda>('emendas', (dbEmendas) => {
       const merged = [...dbEmendas];
@@ -325,6 +337,12 @@ export default function App() {
   };
 
   const deleteProject = async (id: string) => {
+    // 1. Immediate optimistic UI update
+    setProjects(prev => prev.filter(p => p.id !== id));
+    
+    // 2. Mark project permanently as deleted in localStorage and Firestore tombstone
+    await markProjectAsDeleted(id);
+
     try {
       await removeProject(id);
       
@@ -346,6 +364,9 @@ export default function App() {
   };
 
   const updateProject = async (updatedProject: Project) => {
+    // 1. Immediate optimistic UI update
+    setProjects(prev => prev.map(p => p.id === updatedProject.id ? { ...p, ...updatedProject } : p));
+
     const projectToSave: Project = {
       ...updatedProject,
       updatedByUserName: loggedInUser?.name || 'Administrador Principal'
@@ -461,6 +482,9 @@ export default function App() {
             onNavigateToTransparency={() => {
               setActiveTab('transparency');
             }}
+            isAdminLoggedIn={isAdminLoggedIn}
+            onUpdateProject={updateProject}
+            onDeleteProject={deleteProject}
           />
         );
       case 'transparency':

@@ -34,7 +34,7 @@ export default function ProjectImagesModal({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [previewZoomImage, setPreviewZoomImage] = useState<string | null>(null);
 
-  // Sync state with project prop
+  // Sync state with project prop when opening or changing project
   useEffect(() => {
     if (project) {
       setMainImage(project.mainImage || '');
@@ -44,7 +44,7 @@ export default function ProjectImagesModal({
       setErrorMessage(null);
       setSuccessMessage(null);
     }
-  }, [project, isOpen]);
+  }, [project?.id, isOpen]);
 
   if (!isOpen || !project) return null;
 
@@ -79,7 +79,13 @@ export default function ProjectImagesModal({
   const handleRemoveMainImage = () => {
     setMainImage('');
     setMainImageUrlInput('');
-    setSuccessMessage('Foto principal removida.');
+    setSuccessMessage('Foto principal removida e alterações salvas!');
+    const updated: Project = {
+      ...project,
+      mainImage: undefined,
+      gallery: [...gallery]
+    };
+    onSaveProject(updated);
   };
 
   // Handle local file upload for New Gallery Photo
@@ -91,8 +97,15 @@ export default function ProjectImagesModal({
     setIsProcessing(true);
     try {
       const dataUrl = await processImageFile(file);
-      setGallery(prev => [...prev, dataUrl]);
+      const nextGallery = [...gallery, dataUrl];
+      setGallery(nextGallery);
       setSuccessMessage('Nova foto adicionada à galeria!');
+      // Auto-save updated gallery
+      onSaveProject({
+        ...project,
+        mainImage: mainImage.trim() || undefined,
+        gallery: nextGallery
+      });
     } catch (err: any) {
       setErrorMessage(err.message || 'Erro ao adicionar foto.');
     } finally {
@@ -104,9 +117,16 @@ export default function ProjectImagesModal({
   // Add gallery photo via URL
   const handleAddGalleryUrl = () => {
     if (!newGalleryUrl.trim()) return;
-    setGallery(prev => [...prev, newGalleryUrl.trim()]);
+    const nextGallery = [...gallery, newGalleryUrl.trim()];
+    setGallery(nextGallery);
     setNewGalleryUrl('');
     setSuccessMessage('Foto adicionada à galeria!');
+    // Auto-save updated gallery
+    onSaveProject({
+      ...project,
+      mainImage: mainImage.trim() || undefined,
+      gallery: nextGallery
+    });
   };
 
   // Replace an existing gallery photo via file upload
@@ -118,13 +138,17 @@ export default function ProjectImagesModal({
     setIsProcessing(true);
     try {
       const dataUrl = await processImageFile(file);
-      setGallery(prev => {
-        const next = [...prev];
-        next[index] = dataUrl;
-        return next;
-      });
+      const nextGallery = [...gallery];
+      nextGallery[index] = dataUrl;
+      setGallery(nextGallery);
       setEditingIndex(null);
       setSuccessMessage(`Foto #${index + 1} alterada com sucesso!`);
+      // Auto-save updated gallery
+      onSaveProject({
+        ...project,
+        mainImage: mainImage.trim() || undefined,
+        gallery: nextGallery
+      });
     } catch (err: any) {
       setErrorMessage(err.message || 'Erro ao alterar foto.');
     } finally {
@@ -136,23 +160,35 @@ export default function ProjectImagesModal({
   // Replace gallery photo via URL
   const handleApplyReplaceUrl = (index: number) => {
     if (!replaceUrlInput.trim()) return;
-    setGallery(prev => {
-      const next = [...prev];
-      next[index] = replaceUrlInput.trim();
-      return next;
-    });
+    const nextGallery = [...gallery];
+    nextGallery[index] = replaceUrlInput.trim();
+    setGallery(nextGallery);
     setEditingIndex(null);
     setReplaceUrlInput('');
     setSuccessMessage(`Foto #${index + 1} alterada com sucesso!`);
+    // Auto-save updated gallery
+    onSaveProject({
+      ...project,
+      mainImage: mainImage.trim() || undefined,
+      gallery: nextGallery
+    });
   };
 
   // Remove photo from gallery
   const handleRemoveGalleryPhoto = (index: number) => {
-    setGallery(prev => prev.filter((_, i) => i !== index));
+    const nextGallery = gallery.filter((_, i) => i !== index);
+    setGallery(nextGallery);
     if (editingIndex === index) {
       setEditingIndex(null);
     }
-    setSuccessMessage('Foto excluída da galeria.');
+    setSuccessMessage('Foto excluída da galeria e alterações salvas!');
+    // Auto-save immediately to project so it takes effect instantly
+    const updated: Project = {
+      ...project,
+      mainImage: mainImage.trim() || undefined,
+      gallery: nextGallery
+    };
+    onSaveProject(updated);
   };
 
   // Save all changes to the project
@@ -160,7 +196,7 @@ export default function ProjectImagesModal({
     const updated: Project = {
       ...project,
       mainImage: mainImage.trim() || undefined,
-      gallery: gallery.length > 0 ? gallery : undefined
+      gallery: [...gallery]
     };
     onSaveProject(updated);
     onClose();
@@ -469,7 +505,7 @@ export default function ProjectImagesModal({
             onClick={onClose}
             className="px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
           >
-            Cancelar
+            Fechar
           </button>
           
           <button
@@ -478,7 +514,7 @@ export default function ProjectImagesModal({
             className="px-5 py-2.5 text-xs font-bold text-white bg-indigo-900 hover:bg-indigo-950 rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Check className="w-4 h-4" />
-            Salvar Alterações de Imagens
+            Concluir Edição
           </button>
         </div>
 

@@ -298,6 +298,46 @@ export async function removeRecord(id: string) {
   }
 }
 
+export const DELETED_PROJECTS_STORAGE_KEY = 'ifpp_deleted_project_ids';
+
+export function getDeletedProjectIds(): string[] {
+  try {
+    const raw = localStorage.getItem(DELETED_PROJECTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addDeletedProjectId(id: string) {
+  try {
+    const list = getDeletedProjectIds();
+    if (!list.includes(id)) {
+      list.push(id);
+      localStorage.setItem(DELETED_PROJECTS_STORAGE_KEY, JSON.stringify(list));
+    }
+  } catch (e) {
+    console.warn("Não foi possível salvar ID de projeto excluído no localStorage:", e);
+  }
+}
+
+export async function markProjectAsDeleted(id: string) {
+  addDeletedProjectId(id);
+  try {
+    const tombstoneRef = doc(db, 'records', `tombstone_proj_${id}`);
+    await setDoc(tombstoneRef, {
+      id: `tombstone_proj_${id}`,
+      type: 'tombstone_project',
+      projectId: id,
+      deletedAt: new Date().toISOString()
+    });
+  } catch (e) {
+    console.warn("Aviso ao salvar marcação de exclusão no Firestore:", e);
+  }
+}
+
 export async function saveProject(project: Project) {
   const path = `projects/${project.id}`;
   try {
@@ -311,6 +351,7 @@ export async function saveProject(project: Project) {
 export async function removeProject(id: string) {
   const path = `projects/${id}`;
   try {
+    await markProjectAsDeleted(id);
     const docRef = doc(db, 'projects', id);
     await deleteDoc(docRef);
   } catch (error) {

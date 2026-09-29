@@ -620,7 +620,7 @@ export default function AdminPanel({
       territories: parsedTerritories.length > 0 ? parsedTerritories : undefined,
       indicators: parsedIndicators.length > 0 ? parsedIndicators : undefined,
       mainImage: editProjMainImage.trim() || undefined,
-      gallery: editProjGallery.length > 0 ? editProjGallery : undefined,
+      gallery: [...editProjGallery],
       budget: editProjBudget ? parseCurrencyBRL(editProjBudget) : undefined,
       emendaId: editProjEmendaId || undefined,
       fundingSourceType: editProjFundingSourceType.trim() || undefined,
@@ -3833,7 +3833,7 @@ Guarde estas informações com segurança e não as compartilhe com ninguém.`;
           project={projectToManageImages}
           onSaveProject={(updatedProj) => {
             updateProject(updatedProj);
-            setProjectToManageImages(null);
+            setProjectToManageImages(updatedProj);
             showNotification('Imagens do projeto atualizadas com sucesso!');
           }}
         />

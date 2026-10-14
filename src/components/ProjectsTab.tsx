@@ -319,10 +319,15 @@ export default function ProjectsTab({
     // Official formalization items (Transferegov, Concedente, Emenda, etc.)
     // Rule: Campos sem conteúdo não devem aparecer
     const formalizationItems = [
-      { label: 'Número da Proposta Transferegov', value: currentProject.proposalNumber ? `Proposta nº ${currentProject.proposalNumber}` : null, isMono: true },
+      { label: 'Número da Proposta', value: currentProject.proposalNumber ? `Proposta nº ${currentProject.proposalNumber}` : null, isMono: true },
+      { label: 'Projeto nº', value: currentProject.projectNumber ? `${currentProject.projectNumber}` : null, isMono: true },
+      { label: 'Processo', value: currentProject.processNumber, isMono: true },
+      { label: 'Período de execução', value: currentProject.executionPeriod || (currentProject.year ? String(currentProject.year) : null) },
+      { label: 'Fonte do recurso', value: currentProject.fundingSourceType },
+      { label: 'Patrocínio / Apoio Institucional', value: currentProject.grantingOrgan || currentProject.fundingOrgan },
       { label: 'Proponente', value: currentProject.proponentName },
       { label: 'CNPJ do Proponente', value: currentProject.proponentCnpj, isMono: true },
-      { label: 'Órgão Concedente', value: currentProject.grantingOrgan || currentProject.fundingOrgan },
+      { label: 'Data de recebimento registrada', value: currentProject.receiptDate },
       { label: 'Programa', value: currentProject.programName },
       { label: 'Objeto Oficial', value: currentProject.officialObject },
       { label: 'Valor Global', value: currentProject.globalValue ? formatBRL(currentProject.globalValue) : null, isMono: true },
@@ -330,9 +335,7 @@ export default function ProjectsTab({
       { label: 'Contrapartida', value: currentProject.counterpartValue ? formatBRL(currentProject.counterpartValue) : null, isMono: true },
       { label: 'Número da Emenda', value: currentProject.emendaNumber || linkedEmenda?.code, isMono: true },
       { label: 'Autor / Indicação', value: currentProject.authorIndication || currentProject.fundingAuthor || linkedEmenda?.author },
-      { label: 'Número do Processo', value: currentProject.processNumber, isMono: true },
       { label: 'Instrumento / Identificação', value: currentProject.instrumentNumber || currentProject.fundingInstrument, isMono: true },
-      { label: 'Fonte do Recurso', value: currentProject.fundingSourceType },
     ].filter(item => Boolean(item.value));
 
     return (
@@ -613,6 +616,24 @@ export default function ProjectsTab({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ACESSIBILIDADE */}
+          {currentProject.accessibilityNote && (
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-3">
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+                  <span className="w-2.5 h-6 rounded-full bg-emerald-600 inline-block" />
+                  Acessibilidade
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Condições de acesso, acolhimento e locomoção nos locais de realização
+                </p>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-medium bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                {currentProject.accessibilityNote}
+              </p>
             </div>
           )}
 

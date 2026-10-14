@@ -53,26 +53,38 @@ export const initialProjects: Project[] = [
     location: 'Rio de Janeiro e Teresópolis',
     description: 'Projeto de integração e valorização de artistas e fazedores de cultura ligados ao Funk e ao Trap no Estado do Rio de Janeiro, com ações de circulação, intercâmbio, encontros e festival.',
     fullDescription: 'O FunkTrap Festival celebrou a potência cultural da juventude periférica, promovendo a integração e o protagonismo de artistas, DJs, MCs e produtores culturais independentes do Rio de Janeiro e da Região Serrana. A programação contemplou encontros formativos de produção musical e direitos autorais, rodadas de intercâmbio criativo entre coletivos territoriais e apresentações abertas ao público, culminando em uma grande celebração comunitária da arte urbana fluminense.',
-    impact: '+3 mil pessoas presenciais e +100 artistas',
+    impact: '+3.000 pessoas presenciais e +100 artistas alcançados',
     indicators: [
       { value: '+100', label: 'Artistas alcançados diretamente' },
-      { value: '+3 mil', label: 'Pessoas presenciais' },
-      { value: '+10 mil', label: 'Alcance online' },
+      { value: '+3.000', label: 'Pessoas alcançadas presencialmente durante o projeto' },
+      { value: '+10.000', label: 'De alcance online' },
       { value: '1.385', label: 'Pessoas na atividade final' }
     ],
     territories: [
-      'Rio de Janeiro (Zona Norte e Centro)',
-      'Teresópolis (Polos culturais e praças públicas)'
+      'Rio de Janeiro – Morro da Urca e Parque Glória Maria / Parque das Ruínas',
+      'Teresópolis – Várzea'
     ],
+    executionLocations: 'Rio de Janeiro – Morro da Urca e Parque Glória Maria / Parque das Ruínas; Teresópolis – Várzea',
+    accessibilityNote: 'As atividades foram realizadas em locais com acessibilidade de locomoção.',
     mainImage: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1200&q=80',
     gallery: [
       'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80',
-      'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80'
+      'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80'
     ],
-    fundingSourceType: 'Fomento Cultural e Parcerias Coletivas',
-    fundingInstrument: 'Edital de Fomento à Cultura Urbana Fluminense',
-    financialStatusNote: 'Informações financeiras ainda não disponibilizadas.'
+    projectNumber: '094',
+    processNumber: '22/300.128/2022',
+    executionPeriod: '2023',
+    fundingSourceType: 'Edital INTEGRA RIO',
+    fundingOrgan: 'Prefeitura da Cidade do Rio de Janeiro / Secretaria de Integração Metropolitana – SEIM / Integra Rio',
+    grantingOrgan: 'Prefeitura da Cidade do Rio de Janeiro, por intermédio da Secretaria de Integração Metropolitana – SEIM / Integra Rio, conforme documentação original do projeto.',
+    budget: 200000,
+    receivedAmount: 200000,
+    provenExpenses: 200000,
+    balance: 0,
+    receiptDate: '29/12/2022'
   },
   {
     id: 'pre-vestibular-darcy-ribeiro',
@@ -154,6 +166,42 @@ export const initialProjects: Project[] = [
     mainImage: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80',
     gallery: [],
     financialStatusNote: 'Projeto aprovado. As informações de execução e prestação de contas serão publicadas nesta página conforme forem disponibilizadas.'
+  },
+  {
+    id: 'projeto-abracar',
+    title: 'Projeto Abracar',
+    type: 'projeto',
+    category: 'Cultura Popular',
+    year: 2024,
+    status: 'concluido',
+    proposalNumber: '6813/2024',
+    proponentName: 'Instituto de Formação e Promoção de Políticas Públicas – IFPP',
+    proponentCnpj: '08.270.433/0001-79',
+    tags: ['Dança Folclórica Alemã', 'Cultura Popular', 'Música', 'Quadrilha', 'Juventude'],
+    location: 'Rio de Janeiro e Petrópolis (RJ)',
+    description: 'Dança folclórica alemã, música e quadrilha em um percurso de formação e valorização cultural. Iniciativa realizada pelo IFPP voltada ao fortalecimento da identidade cultural, inclusão social e ampliação do acesso às artes populares.',
+    fullDescription: 'O Projeto Abracar foi realizado com foco na promoção da cultura popular, reunindo atividades artísticas e educativas ligadas à música, à dança folclórica alemã e à quadrilha.\n\nO trabalho teve como eixo o fortalecimento da identidade cultural, a inclusão social e a ampliação do acesso às manifestações artísticas no Rio de Janeiro e em Petrópolis.\n\nLinguagens Culturais e Formas de Expressão:\n• 01. Dança Folclórica Alemã: Valorização de manifestações folclóricas e da formação em dança, com a realização da Oficina Folclórica Germânica, dialogando com a preservação do patrimônio imaterial e transmissão de saberes.\n• 02. Oficinas de Música: Práticas de música popular e instrumental integradas às ações culturais e educativas do projeto.\n• 03. Quadrilha: Oficinas culturais dedicadas a essa manifestação de dança popular no conjunto de atividades do Abracar.\n\nEixos transversais do projeto: Formação, Difusão e Produção Cultural.\n\nArticulação Comunitária: O plano de trabalho indicou a utilização de estruturas existentes, em articulação com escolas, centros comunitários e outras instituições locais.',
+    impact: 'Meta de 600 jovens em capacitação e inclusão cultural',
+    indicators: [
+      { value: '600', label: 'Jovens (meta de capacitação do plano)' },
+      { value: '400', label: 'Estudantes de instituições públicas (estimativa)' },
+      { value: '100', label: 'Mulheres (estimativa de beneficiárias)' },
+      { value: '100', label: 'Pessoas LGBT (segmento previsto)' }
+    ],
+    territories: [
+      'Rio de Janeiro (RJ) – Escolas e centros comunitários contemplados',
+      'Petrópolis (RJ) – Articulação com estruturas e espaços locais'
+    ],
+    executionLocations: 'Rio de Janeiro e Petrópolis (RJ)',
+    accessibilityNote: 'Articulação com estruturas existentes, escolas e centros comunitários acessíveis à locomoção nos territórios atendidos.',
+    mainImage: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&w=1200&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80'
+    ],
+    financialStatusNote: 'Documento de referência: Portfólio Institucional / Cultura Popular – Proposta nº 6813/2024 (03/09/2024). As quantidades apresentadas são metas e estimativas do plano original de trabalho.'
   }
 ];
 
@@ -322,6 +370,52 @@ export const initialRecords: TransparencyRecord[] = [
     date: '20/03/2024',
     docCategory: 'relatorios',
     projectLinked: 'pre-vestibular-darcy-ribeiro',
+    fileUrl: '#'
+  },
+  {
+    id: 'prestacao-contas-funktrap-2023',
+    type: 'conta',
+    title: 'Relatório Final de Prestação de Contas – FunkTrap Festival',
+    year: 2023,
+    description: 'Relatório Final de Prestação de Contas do Edital INTEGRA RIO (Processo 22/300.128/2022, Projeto nº 094). Demonstra a comprovação integral de despesas no valor de R$ 200.000,00, saldo R$ 0,00 e metas de impacto cultural executadas no Rio de Janeiro e Teresópolis.',
+    date: '15/12/2023',
+    amount: 200000,
+    category: 'despesa',
+    docCategory: 'prestacao_contas',
+    projectLinked: 'funktrap-festival',
+    fileUrl: '#'
+  },
+  {
+    id: 'autorizacao-parque-ruinas-funktrap',
+    type: 'ata',
+    title: 'Autorização e Regulamento de Utilização – Parque Glória Maria / Parque das Ruínas',
+    year: 2023,
+    description: 'Documento oficial de autorização e regulamento de utilização do Parque Glória Maria / Parque das Ruínas para a realização das atividades públicas do FunkTrap Festival.',
+    date: '20/10/2023',
+    docCategory: 'termos_parceria',
+    projectLinked: 'funktrap-festival',
+    fileUrl: '#'
+  },
+  {
+    id: 'documento-execucao-seim-funktrap',
+    type: 'ata',
+    title: 'Documento de Execução e Apoio Institucional – SEIM / Integra Rio',
+    year: 2023,
+    description: 'Documento de formalização e apoio institucional da Prefeitura da Cidade do Rio de Janeiro, por intermédio da Secretaria de Integração Metropolitana – SEIM / Integra Rio.',
+    date: '29/12/2022',
+    docCategory: 'outros',
+    projectLinked: 'funktrap-festival',
+    fileUrl: '#'
+  },
+  {
+    id: 'portfolio-abracar-2024',
+    type: 'conta',
+    title: 'Portfólio Institucional e Plano de Trabalho – Projeto Abracar (Proposta nº 6813/2024)',
+    year: 2024,
+    description: 'Documento oficial do IFPP referente à Proposta nº 6813/2024 (Dança folclórica alemã / germânica, música e quadrilha). Apresenta as diretrizes do plano de trabalho, meta de 600 jovens, públicos estimados, territórios do Rio de Janeiro e Petrópolis e articulação comunitária.',
+    date: '03/09/2024',
+    docCategory: 'relatorios',
+    projectLinked: 'projeto-abracar',
     fileUrl: '#'
   }
 ];

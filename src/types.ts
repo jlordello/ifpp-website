@@ -86,6 +86,10 @@ export interface Project {
   authorIndication?: string; // Autor / indicação parlamentar
   processNumber?: string; // Número do processo
   instrumentNumber?: string; // Número do instrumento
+  projectNumber?: string; // Número do projeto (ex: 094)
+  receiptDate?: string; // Data de recebimento registrada
+  accessibilityNote?: string; // Informação de acessibilidade
+  executionPeriod?: string; // Período de execução (ex: 2023)
   goalsAndObjectives?: string; // Objetivos e metas
   targetAudience?: string; // Público beneficiário
   participantsCount?: string; // Número de participantes

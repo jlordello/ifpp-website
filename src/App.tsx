@@ -85,6 +85,11 @@ export default function App() {
         const existingIdx = merged.findIndex(p => p.id === initP.id);
         if (existingIdx === -1) {
           merged.push(initP);
+        } else {
+          merged[existingIdx] = {
+            ...initP,
+            ...merged[existingIdx]
+          };
         }
       });
       setProjects(merged);

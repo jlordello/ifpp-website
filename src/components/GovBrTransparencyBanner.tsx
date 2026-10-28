@@ -39,12 +39,12 @@ export default function GovBrTransparencyBanner({
         {/* Header Section */}
         <div className="p-6 sm:p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5 max-w-3xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-200">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                Dados Oficiais • Transferegov / gov.br
+            <div className="flex flex-wrap items-center gap-2 max-w-full">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-[11px] sm:text-xs font-bold border border-emerald-200 max-w-full break-words">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Dados Oficiais • Transferegov / gov.br</span>
               </span>
-              <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+              <span className="text-[10px] sm:text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full max-w-full break-words">
                 Discricionárias e Legais
               </span>
             </div>

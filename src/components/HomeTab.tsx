@@ -253,8 +253,8 @@ export default function HomeTab({ onNavigate }: HomeTabProps) {
   return (
     <div id="home-view" className="bg-slate-50 min-h-screen selection:bg-indigo-600 selection:text-white">
       
-      {/* 1. Dynamic modern Hero Section */}
-      <section className="relative overflow-hidden bg-slate-950 text-white pt-24 pb-28 px-4 sm:px-6 lg:px-8 border-b border-indigo-950">
+      {/* 1. Dynamic modern Hero Section - optimized height for PC viewport */}
+      <section className="relative overflow-hidden bg-slate-950 text-white pt-4 sm:pt-6 md:pt-8 lg:pt-9 pb-8 sm:pb-10 md:pb-12 lg:pb-14 px-4 sm:px-6 lg:px-8 border-b border-indigo-950">
         {/* Colorful ambient background glows */}
         <div className="absolute top-1/10 left-1/4 w-[500px] h-[500px] rounded-full bg-indigo-500/10 blur-[130px] -translate-x-1/2 pointer-events-none" />
         <div className="absolute bottom-1/10 right-1/4 w-[400px] h-[400px] rounded-full bg-emerald-500/10 blur-[120px] translate-x-1/2 pointer-events-none" />
@@ -263,55 +263,55 @@ export default function HomeTab({ onNavigate }: HomeTabProps) {
         {/* Diagonal geometric grid line accent */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e1b4b_1px,transparent_1px),linear-gradient(to_bottom,#1e1b4b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30 pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto relative z-10 text-center">
+        <div className="max-w-6xl mx-auto relative z-10 text-center">
           
-          {/* Animated floating location badge */}
+          {/* Animated floating location badge - responsive wrapping without text spill */}
           <motion.div 
-            initial={{ opacity: 0, y: -15 }}
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-1.5 sm:gap-2.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full bg-indigo-900/40 border border-indigo-500/30 text-[9px] min-[360px]:text-[10px] sm:text-xs font-semibold text-indigo-300 mb-8 shadow-inner shadow-indigo-900/60 whitespace-nowrap"
+            transition={{ duration: 0.4 }}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-900/40 border border-indigo-500/30 text-[10px] sm:text-xs font-semibold text-indigo-300 mb-2.5 sm:mb-4 shadow-inner shadow-indigo-900/60 max-w-full flex-wrap justify-center text-center leading-normal"
           >
-            <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 animate-bounce" />
-            <span>Presença Ativa: <strong className="font-bold">Petrópolis • Paraíba do Sul • Rio de Janeiro</strong></span>
+            <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="break-words">Presença Ativa: <strong className="font-bold text-white">Petrópolis • Paraíba do Sul • Rio de Janeiro</strong></span>
           </motion.div>
 
           <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-2xl sm:text-5xl lg:text-7xl font-black tracking-tight max-w-5xl mx-auto leading-[1.1]"
+            transition={{ duration: 0.5, delay: 0.08 }}
+            className="text-2xl sm:text-3.5xl md:text-4xl lg:text-4.5xl xl:text-5xl font-black tracking-tight max-w-4xl mx-auto leading-[1.14]"
           >
             Nós transformamos vidas através do <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-indigo-300 to-rose-400">impacto social real</span>
           </motion.h1>
 
           <motion.p 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="mt-6 text-sm sm:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed"
+            transition={{ duration: 0.5, delay: 0.15 }}
+            className="mt-2.5 sm:mt-3 text-xs sm:text-sm md:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed"
           >
             O <strong>IFPP</strong> constrói novas realidades nas periferias fluminenses por meio de programas integrados de <span className="text-white underline decoration-rose-500 decoration-2 underline-offset-4">Cultura</span>, <span className="text-white underline decoration-emerald-500 decoration-2 underline-offset-4">Esporte</span>, <span className="text-white underline decoration-indigo-400 decoration-2 underline-offset-4">Educação</span>, <span className="text-white underline decoration-amber-500 decoration-2 underline-offset-4">Formação</span> e <span className="text-white underline decoration-purple-500 decoration-2 underline-offset-4">Cidadania</span>.
           </motion.p>
 
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="mt-12 flex flex-col sm:flex-row gap-4 justify-center items-center"
+            transition={{ duration: 0.5, delay: 0.22 }}
+            className="mt-4 sm:mt-5 flex flex-col sm:flex-row gap-2.5 sm:gap-3.5 justify-center items-center"
           >
             <button
               onClick={() => onNavigate('projects')}
-              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-indigo-950 font-black transition-all duration-150 shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2.5 group cursor-pointer"
+              className="w-full sm:w-auto px-5 sm:px-7 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-indigo-950 font-black text-xs sm:text-sm transition-all duration-150 shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 group cursor-pointer"
             >
               Ver Nossas Ações
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
             <button
               onClick={() => onNavigate('transparency')}
-              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/20 text-indigo-200 hover:text-white font-bold transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-md"
+              className="w-full sm:w-auto px-5 sm:px-7 py-2.5 sm:py-3 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/30 text-indigo-200 hover:text-white font-bold text-xs sm:text-sm transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-md"
             >
-              <Shield className="w-5 h-5 text-indigo-400" />
+              <Shield className="w-4 h-4 text-indigo-400" />
               Transparência Pública
             </button>
           </motion.div>
@@ -320,39 +320,39 @@ export default function HomeTab({ onNavigate }: HomeTabProps) {
       </section>
 
       {/* 2. Key Stats Panel */}
-      <section className="relative -mt-12 z-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 bg-white p-6 sm:p-8 rounded-3xl shadow-2xl shadow-slate-200 border border-slate-100">
+      <section className="relative -mt-6 sm:-mt-8 z-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 lg:gap-6 bg-white p-3.5 sm:p-6 lg:p-7 rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-100">
           
-          <div className="p-4 rounded-2xl hover:bg-slate-50 transition-colors">
-            <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 mb-4">
-              <Users className="w-6 h-6" />
+          <div className="p-2.5 sm:p-4 rounded-2xl hover:bg-slate-50 transition-colors flex flex-col items-center sm:items-start text-center sm:text-left min-w-0 overflow-hidden">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 mb-1.5 sm:mb-3 shrink-0">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div className="text-xl sm:text-3xl font-black text-slate-950">+1.200</div>
-            <div className="text-xs sm:text-sm font-semibold text-slate-500 mt-1">Jovens Qualificados</div>
+            <div className="text-base sm:text-2xl lg:text-3xl font-black text-slate-950 font-mono truncate max-w-full">+1.200</div>
+            <div className="text-[10px] sm:text-xs md:text-sm font-semibold text-slate-500 mt-0.5 break-words leading-tight max-w-full">Jovens Qualificados</div>
           </div>
 
-          <div className="p-4 rounded-2xl hover:bg-slate-50 transition-colors">
-            <div className="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 mb-4">
-              <BookOpen className="w-6 h-6" />
+          <div className="p-2.5 sm:p-4 rounded-2xl hover:bg-slate-50 transition-colors flex flex-col items-center sm:items-start text-center sm:text-left min-w-0 overflow-hidden">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 mb-1.5 sm:mb-3 shrink-0">
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div className="text-xl sm:text-3xl font-black text-slate-950">+40</div>
-            <div className="text-xs sm:text-sm font-semibold text-slate-500 mt-1">Oficinas Realizadas</div>
+            <div className="text-base sm:text-2xl lg:text-3xl font-black text-slate-950 font-mono truncate max-w-full">+40</div>
+            <div className="text-[10px] sm:text-xs md:text-sm font-semibold text-slate-500 mt-0.5 break-words leading-tight max-w-full">Oficinas Realizadas</div>
           </div>
 
-          <div className="p-4 rounded-2xl hover:bg-slate-50 transition-colors">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 mb-4">
-              <Compass className="w-6 h-6" />
+          <div className="p-2.5 sm:p-4 rounded-2xl hover:bg-slate-50 transition-colors flex flex-col items-center sm:items-start text-center sm:text-left min-w-0 overflow-hidden">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 mb-1.5 sm:mb-3 shrink-0">
+              <Compass className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div className="text-xl sm:text-3xl font-black text-slate-950">3</div>
-            <div className="text-xs sm:text-sm font-semibold text-slate-500 mt-1">Municípios Atendidos</div>
+            <div className="text-base sm:text-2xl lg:text-3xl font-black text-slate-950 font-mono truncate max-w-full">3</div>
+            <div className="text-[10px] sm:text-xs md:text-sm font-semibold text-slate-500 mt-0.5 break-words leading-tight max-w-full">Municípios Atendidos</div>
           </div>
 
-          <div className="p-4 rounded-2xl hover:bg-slate-50 transition-colors">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 mb-4">
-              <Award className="w-6 h-6" />
+          <div className="p-2.5 sm:p-4 rounded-2xl hover:bg-slate-50 transition-colors flex flex-col items-center sm:items-start text-center sm:text-left min-w-0 overflow-hidden">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 mb-1.5 sm:mb-3 shrink-0">
+              <Award className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div className="text-xl sm:text-3xl font-black text-slate-950">100%</div>
-            <div className="text-xs sm:text-sm font-semibold text-slate-500 mt-1">Contas Auditadas</div>
+            <div className="text-base sm:text-2xl lg:text-3xl font-black text-slate-950 font-mono truncate max-w-full">100%</div>
+            <div className="text-[10px] sm:text-xs md:text-sm font-semibold text-slate-500 mt-0.5 break-words leading-tight max-w-full">Contas Aprovadas</div>
           </div>
 
         </div>
@@ -523,11 +523,11 @@ export default function HomeTab({ onNavigate }: HomeTabProps) {
               </p>
 
               {/* Metric grid */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {activeCityObj.metrics.map((m, idx) => (
-                  <div key={idx} className="bg-indigo-950/60 p-4 rounded-xl border border-indigo-800/20 text-center">
-                    <span className="block text-xl sm:text-2xl font-black text-emerald-400 font-mono">{m.value}</span>
-                    <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 leading-tight">{m.label}</span>
+                  <div key={idx} className="bg-indigo-950/60 p-2 sm:p-4 rounded-xl border border-indigo-800/20 text-center flex flex-col justify-center items-center min-w-0 overflow-hidden">
+                    <span className="block text-base sm:text-2xl font-black text-emerald-400 font-mono leading-none">{m.value}</span>
+                    <span className="block text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1.5 leading-tight break-words max-w-full">{m.label}</span>
                   </div>
                 ))}
               </div>
@@ -632,21 +632,21 @@ export default function HomeTab({ onNavigate }: HomeTabProps) {
             </div>
 
             {/* Output Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 my-5 sm:my-6">
               
-              <div className="bg-slate-950/60 p-4 rounded-xl border border-indigo-950/80 text-center">
+              <div className="bg-slate-950/60 p-3.5 sm:p-4 rounded-xl border border-indigo-950/80 text-center min-w-0">
                 <span className="block text-xl sm:text-3xl font-black text-white font-mono">{simResult.beneficiarios}</span>
-                <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 leading-tight">Moradores Impactados</span>
+                <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 leading-tight break-words">{simResult.beneficiarios === 1 ? 'Morador Impactado' : 'Moradores Impactados'}</span>
               </div>
 
-              <div className="bg-slate-950/60 p-4 rounded-xl border border-indigo-950/80 text-center">
+              <div className="bg-slate-950/60 p-3.5 sm:p-4 rounded-xl border border-indigo-950/80 text-center min-w-0">
                 <span className="block text-xl sm:text-3xl font-black text-emerald-400 font-mono">{simResult.unidades}</span>
-                <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 leading-tight">{simResult.unidadesLabel}</span>
+                <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 leading-tight break-words">{simResult.unidadesLabel}</span>
               </div>
 
-              <div className="bg-slate-950/60 p-4 rounded-xl border border-indigo-950/80 text-center">
+              <div className="bg-slate-950/60 p-3.5 sm:p-4 rounded-xl border border-indigo-950/80 text-center min-w-0">
                 <span className="block text-xl sm:text-3xl font-black text-indigo-300 font-mono">{simResult.horas}</span>
-                <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 leading-tight">{simResult.horasLabel}</span>
+                <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 leading-tight break-words">{simResult.horasLabel}</span>
               </div>
 
             </div>

@@ -25,17 +25,17 @@ export default function Navbar({ activeTab, setActiveTab, isAdminLoggedIn, onLog
   return (
     <nav id="app-navbar" className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-20">
+        <div className="flex justify-between h-14 sm:h-16">
           {/* Logo Section */}
           <div className="flex items-center">
             <button 
               onClick={() => handleNavClick('home')}
-              className="flex items-center group text-left focus:outline-none py-1.5"
+              className="flex items-center group text-left focus:outline-none py-1"
             >
               <img 
                 src="https://i.ibb.co/Kzzbrxw5/Chat-GPT-Image-11-de-jul-de-2026-19-03-41-removebg-preview.png" 
                 alt="IFPP Logo" 
-                className="h-16 w-auto object-contain transition-transform duration-200 group-hover:scale-102"
+                className="h-10 sm:h-12 w-auto object-contain transition-transform duration-200 group-hover:scale-102"
                 referrerPolicy="no-referrer"
               />
             </button>

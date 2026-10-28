@@ -352,47 +352,53 @@ export default function TransparencyTab({
 
         {/* 11. INDICADORES GERAIS DA TRANSPARÊNCIA (Apenas se calculados a partir dos dados reais > 0) */}
         {(totalRecursosRecebidos > 0 || totalDespesasComprovadas > 0 || totalProjetosComPrestacao > 0 || totalDocumentosPublicos > 0) && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 lg:gap-6">
             
             {totalRecursosRecebidos > 0 && (
-              <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-1">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              <div className="bg-white p-3.5 sm:p-5 lg:p-6 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs space-y-1 min-w-0 overflow-hidden">
+                <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider block leading-tight break-words">
                   Recursos recebidos
                 </span>
-                <span className="text-xl sm:text-2xl font-black text-slate-900 block font-mono">
+                <span 
+                  className="text-xs xs:text-sm sm:text-lg md:text-xl lg:text-2xl font-black text-slate-900 block tracking-tight tabular-nums truncate" 
+                  title={formatBRL(totalRecursosRecebidos)}
+                >
                   {formatBRL(totalRecursosRecebidos)}
                 </span>
               </div>
             )}
 
             {totalDespesasComprovadas > 0 && (
-              <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-1">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              <div className="bg-white p-3.5 sm:p-5 lg:p-6 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs space-y-1 min-w-0 overflow-hidden">
+                <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider block leading-tight break-words">
                   Despesas comprovadas
                 </span>
-                <span className="text-xl sm:text-2xl font-black text-emerald-800 block font-mono">
+                <span 
+                  className="text-xs xs:text-sm sm:text-lg md:text-xl lg:text-2xl font-black text-emerald-800 block tracking-tight tabular-nums truncate" 
+                  title={formatBRL(totalDespesasComprovadas)}
+                >
                   {formatBRL(totalDespesasComprovadas)}
                 </span>
               </div>
             )}
 
             {totalProjetosComPrestacao > 0 && (
-              <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-1">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              <div className="bg-white p-3.5 sm:p-5 lg:p-6 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs space-y-1 min-w-0 overflow-hidden">
+                <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider block leading-tight break-words">
                   Projetos com prestação de contas
                 </span>
-                <span className="text-xl sm:text-2xl font-black text-indigo-950 block">
+                <span className="text-xs xs:text-sm sm:text-lg md:text-xl lg:text-2xl font-black text-indigo-950 block tracking-tight truncate">
                   {totalProjetosComPrestacao} {totalProjetosComPrestacao === 1 ? 'iniciativa' : 'iniciativas'}
                 </span>
               </div>
             )}
 
             {totalDocumentosPublicos > 0 && (
-              <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-1">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              <div className="bg-white p-3.5 sm:p-5 lg:p-6 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs space-y-1 min-w-0 overflow-hidden">
+                <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider block leading-tight break-words">
                   Documentos públicos
                 </span>
-                <span className="text-xl sm:text-2xl font-black text-slate-900 block">
+                <span className="text-xs xs:text-sm sm:text-lg md:text-xl lg:text-2xl font-black text-slate-900 block tracking-tight truncate">
                   {totalDocumentosPublicos} {totalDocumentosPublicos === 1 ? 'documento' : 'documentos'}
                 </span>
               </div>

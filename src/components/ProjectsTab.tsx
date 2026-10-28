@@ -793,29 +793,29 @@ export default function ProjectsTab({
             ) : hasFinancialInfo ? (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100">
+                  <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 min-w-0 overflow-hidden">
                     <span className="text-[11px] font-bold text-indigo-900/70 uppercase tracking-wider block">
                       Recurso recebido
                     </span>
-                    <span className="text-lg sm:text-2xl font-black text-indigo-950 block mt-1 font-mono">
+                    <span className="text-base sm:text-2xl font-black text-indigo-950 block mt-1 tracking-tight tabular-nums truncate">
                       {receivedVal !== undefined ? formatBRL(receivedVal) : 'Não informado'}
                     </span>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-100">
+                  <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-100 min-w-0 overflow-hidden">
                     <span className="text-[11px] font-bold text-emerald-900/70 uppercase tracking-wider block">
                       Despesas comprovadas
                     </span>
-                    <span className="text-lg sm:text-2xl font-black text-emerald-900 block mt-1 font-mono">
+                    <span className="text-base sm:text-2xl font-black text-emerald-900 block mt-1 tracking-tight tabular-nums truncate">
                       {provenVal !== undefined ? formatBRL(provenVal) : 'Em comprovação'}
                     </span>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 min-w-0 overflow-hidden">
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
                       Saldo
                     </span>
-                    <span className="text-lg sm:text-2xl font-black text-slate-800 block mt-1 font-mono">
+                    <span className="text-base sm:text-2xl font-black text-slate-800 block mt-1 tracking-tight tabular-nums truncate">
                       {formatBRL(balanceVal)}
                     </span>
                   </div>

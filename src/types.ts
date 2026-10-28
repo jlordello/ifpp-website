@@ -71,6 +71,7 @@ export interface Project {
   provenExpenses?: number; // Despesas comprovadas
   balance?: number; // Saldo
   financialStatusNote?: string; // Nota/disclaimer quando não houver informação financeira ainda
+  isValuesPending?: boolean; // Indica quando os valores financeiros estão 'A lançar' / em apuração
 
   // Campos específicos Transferegov e formalização de propostas/projetos
   proposalNumber?: string; // Número da proposta Transferegov (ex: 010962/2026)

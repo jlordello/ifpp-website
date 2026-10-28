@@ -7,6 +7,7 @@ import {
   ChevronRight, X, Sparkles, FolderOpen, Layers, CheckCircle2,
   Users, ArrowUpRight, ShieldCheck, BookOpen, BarChart3, Building
 } from 'lucide-react';
+import GovBrTransparencyBanner from './GovBrTransparencyBanner';
 
 interface TransparencyTabProps {
   records: TransparencyRecord[];
@@ -42,9 +43,14 @@ export default function TransparencyTab({
   // 11. INDICADORES GERAIS DA TRANSPARÊNCIA CALCULADOS AUTOMATICAMENTE
   // (Apenas mostrados se calculados a partir dos dados reais e forem > 0)
   const totalRecursosRecebidos = useMemo(() => {
-    // Sum from emendas and projects that have received amounts
-    const emendasTotal = emendas.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    // Sum from emendas and projects that have real received amounts (excluding pending launch)
+    const emendasTotal = emendas.reduce((acc, curr) => {
+      if (curr.id === 'emenda-2022-01' || !curr.amount || curr.amount <= 0) return acc;
+      return acc + curr.amount;
+    }, 0);
     const projTotal = projects.reduce((acc, curr) => {
+      const isPending = curr.isValuesPending || curr.id === 'sonhos-da-juventude' || curr.financialStatusNote?.toLowerCase().includes('lançar');
+      if (isPending) return acc;
       // If project has receivedAmount and no emendaId (to avoid double counting with emendas)
       if (curr.receivedAmount && !curr.emendaId) {
         return acc + curr.receivedAmount;
@@ -52,17 +58,19 @@ export default function TransparencyTab({
       return acc;
     }, 0);
     const directRecordsReceita = records
-      .filter(r => r.type === 'conta' && r.category === 'receita' && !r.fundingSource)
+      .filter(r => r.type === 'conta' && r.category === 'receita' && !r.fundingSource && r.projectLinked !== 'sonhos-da-juventude')
       .reduce((acc, curr) => acc + (curr.amount || 0), 0);
     return emendasTotal + projTotal + directRecordsReceita;
   }, [emendas, projects, records]);
 
   const totalDespesasComprovadas = useMemo(() => {
-    // Sum of expenses from records and project proven expenses
+    // Sum of expenses from records and project proven expenses (excluding pending launch)
     const recordsExpenses = records
-      .filter(r => r.type === 'conta' && r.category === 'despesa')
+      .filter(r => r.type === 'conta' && r.category === 'despesa' && r.projectLinked !== 'sonhos-da-juventude')
       .reduce((acc, curr) => acc + (curr.amount || 0), 0);
     const projExpenses = projects.reduce((acc, curr) => {
+      const isPending = curr.isValuesPending || curr.id === 'sonhos-da-juventude' || curr.financialStatusNote?.toLowerCase().includes('lançar');
+      if (isPending) return acc;
       // if project has provenExpenses and no linked expense records to avoid duplicate
       const hasRecords = records.some(r => r.projectLinked === curr.id && r.category === 'despesa');
       if (!hasRecords && curr.provenExpenses) {
@@ -235,6 +243,9 @@ export default function TransparencyTab({
             Neste espaço, o IFPP disponibiliza informações institucionais, documentos públicos e dados relacionados à execução de seus projetos e recursos.
           </p>
         </div>
+
+        {/* Painel Oficial de Propostas e Instrumentos - Transferegov */}
+        <GovBrTransparencyBanner className="max-w-5xl mx-auto shadow-md" />
 
         {/* 10. QUATRO ACESSOS PRINCIPAIS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -419,11 +430,17 @@ export default function TransparencyTab({
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {projects.map((proj) => {
                     const linkedEmenda = emendas.find(e => e.id === proj.emendaId);
+                    const isPendingVal = Boolean(
+                      proj.isValuesPending ||
+                      proj.id === 'sonhos-da-juventude' ||
+                      proj.financialStatusNote?.toLowerCase().includes('lançar') ||
+                      proj.financialStatusNote?.toLowerCase().includes('apurar')
+                    );
                     const resourceType = proj.fundingSourceType || (linkedEmenda ? 'Emenda Parlamentar' : 'Parceria / Outros');
                     const instrument = proj.fundingInstrument || linkedEmenda?.code || 'Termo de Parceria';
                     const organ = proj.fundingOrgan || linkedEmenda?.organ || 'Não aplicável';
                     const author = proj.fundingAuthor || linkedEmenda?.author;
-                    const amountVal = proj.receivedAmount || linkedEmenda?.amount;
+                    const amountVal = isPendingVal ? undefined : (proj.receivedAmount || (linkedEmenda && linkedEmenda.amount > 0 ? linkedEmenda.amount : undefined));
                     
                     return (
                       <tr key={proj.id} className="hover:bg-slate-50/80 transition-colors">
@@ -463,7 +480,13 @@ export default function TransparencyTab({
                         </td>
 
                         <td className="px-5 py-4 text-right font-mono font-bold text-slate-900">
-                          {amountVal !== undefined ? formatBRL(amountVal) : (
+                          {isPendingVal ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 text-xs font-semibold">
+                              A lançar
+                            </span>
+                          ) : amountVal !== undefined && amountVal > 0 ? (
+                            formatBRL(amountVal)
+                          ) : (
                             <span className="text-slate-400 font-sans font-normal text-[11px]">Em cadastro</span>
                           )}
                         </td>

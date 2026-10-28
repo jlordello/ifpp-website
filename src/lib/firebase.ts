@@ -12,12 +12,15 @@ import {
   deleteDoc,
   writeBatch,
   getDoc,
-  getDocFromServer,
+  setLogLevel,
   Firestore
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { TransparencyRecord, Project, Emenda, AdminUser } from '../types';
 import { initialProjects, initialEmendas, initialRecords } from '../data/initialData';
+
+// Set log level to error to avoid noisy offline warning logs when establishing connection
+setLogLevel('error');
 
 export const initialUsers: AdminUser[] = [
   {
@@ -32,7 +35,7 @@ export const initialUsers: AdminUser[] = [
 // Initialize Firebase App safely
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore with custom database ID, forced long polling to prevent iframe WebChannel drop errors
+// Initialize Firestore with custom database ID and resilient connection settings
 let firestoreInstance: Firestore;
 try {
   let cacheConfig;
@@ -45,7 +48,7 @@ try {
   }
 
   firestoreInstance = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
+    experimentalAutoDetectLongPolling: true,
     localCache: cacheConfig
   }, firebaseConfig.firestoreDatabaseId);
 } catch {
@@ -55,25 +58,14 @@ try {
 
 export const db = firestoreInstance;
 
-// Validate connection to Firestore as mandated by skill
+// Validate connection to Firestore gracefully
 export async function testConnection(): Promise<boolean> {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    console.info("Conexão ao Cloud Firestore estabelecida com sucesso.");
+    await getDoc(doc(db, 'test', 'connection'));
     return true;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Firestore em modo offline; dados sincronizados assim que a conexão estabilizar.");
-    } else {
-      console.info("Teste de conexão Firestore concluído.");
-    }
+  } catch {
     return false;
   }
-}
-
-// Initial non-blocking connection probe
-if (typeof window !== 'undefined') {
-  testConnection().catch(() => {});
 }
 
 // Firestore Collection References

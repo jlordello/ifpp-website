@@ -5,6 +5,7 @@ import {
   ChevronRight, TrendingUp, DollarSign, Calendar, ChevronDown, CheckCircle, Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import GovBrTransparencyBanner from './GovBrTransparencyBanner';
 
 interface HomeTabProps {
   onNavigate: (tab: string) => void;
@@ -685,6 +686,15 @@ export default function HomeTab({ onNavigate }: HomeTabProps) {
           </div>
 
         </div>
+      </section>
+
+      {/* Painel Oficial de Nossas Ações e Transparência - Transferegov */}
+      <section className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <GovBrTransparencyBanner
+          title="Nossas Ações e Transparência – Painel Oficial Transferegov (gov.br)"
+          subtitle="Acompanhamento consolidado das propostas cadastradas, percentuais de aprovação e instrumentos assinados do IFPP no portal oficial do Governo Federal."
+          className="shadow-xl"
+        />
       </section>
 
       {/* 6. Purpose, Mission & Leadership details */}

@@ -32,15 +32,12 @@ export const initialProjects: Project[] = [
       'https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=1200&q=80',
       'https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=1200&q=80'
     ],
-    budget: 150000,
-    emendaId: 'emenda-2022-01',
     fundingSourceType: 'Emenda Parlamentar',
     fundingInstrument: 'EMENDA-2022-382',
     fundingOrgan: 'Governo do Estado do Rio de Janeiro',
     fundingAuthor: 'Deputado Estadual André Silva',
-    receivedAmount: 150000,
-    provenExpenses: 150000,
-    balance: 0
+    isValuesPending: true,
+    financialStatusNote: 'Valores financeiros em fase de apuração / A lançar. As informações financeiras serão atualizadas tão logo concluída a conferência documental oficial.'
   },
   {
     id: 'funktrap-festival',
@@ -210,10 +207,10 @@ export const initialEmendas: Emenda[] = [
     id: 'emenda-2022-01',
     code: 'EMENDA-2022-382',
     author: 'Deputado Estadual André Silva',
-    amount: 150000,
+    amount: 0,
     year: 2022,
     organ: 'Governo do Estado do Rio de Janeiro',
-    description: 'Apoio à inclusão produtiva e difusão cultural de jovens em municípios fluminenses. Repasse destinado integralmente à execução do Programa "Sonhos da Juventude".',
+    description: 'Apoio à inclusão produtiva e difusão cultural de jovens em municípios fluminenses. Repasse destinado à execução do Programa "Sonhos da Juventude" (valor financeiro em fase de apuração / a lançar).',
     allocatedProjectId: 'sonhos-da-juventude'
   },
   {
@@ -279,11 +276,10 @@ export const initialRecords: TransparencyRecord[] = [
   {
     id: 'conta-2022-sonhos',
     type: 'conta',
-    title: 'Prestação de Contas Final - Projeto Sonhos da Juventude',
+    title: 'Prestação de Contas Final - Projeto Sonhos da Juventude (Valores a lançar)',
     year: 2022,
-    description: 'Demonstrativo completo de receitas e despesas referentes à destinação da EMENDA-2022-382. Custos com contratação de oficineiros especializados em audiovisual, fotógrafos profissionais, material didático e lanche nas comunidades.',
+    description: 'Demonstrativo de atividades executadas no âmbito da EMENDA-2022-382 (oficineiros, fotografia, material didático e lanche nas comunidades). Valores financeiros oficiais em fase de apuração / a lançar.',
     date: '20/12/2022',
-    amount: 150000,
     category: 'despesa',
     docCategory: 'prestacao_contas',
     projectLinked: 'sonhos-da-juventude',
@@ -305,11 +301,10 @@ export const initialRecords: TransparencyRecord[] = [
   {
     id: 'nf-sonhos-2022',
     type: 'conta',
-    title: 'Demonstrativo de Notas Fiscais e Comprovantes de Aplicação',
+    title: 'Demonstrativo de Notas Fiscais e Comprovantes de Aplicação (Valores a lançar)',
     year: 2022,
-    description: 'Compilado das notas fiscais de serviços e materiais aplicados integralmente no fomento às oficinas culturais do Sonhos da Juventude com atesto de recebimento.',
+    description: 'Compilado das notas fiscais de serviços e materiais aplicados nas oficinas culturais do Sonhos da Juventude com atesto de recebimento. Valores financeiros em apuração.',
     date: '20/12/2022',
-    amount: 150000,
     category: 'despesa',
     docCategory: 'notas_fiscais',
     projectLinked: 'sonhos-da-juventude',

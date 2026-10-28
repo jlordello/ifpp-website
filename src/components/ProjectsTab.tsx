@@ -7,6 +7,7 @@ import {
   Landmark, DollarSign, X, ChevronRight, Layers, Tag, Info, ArrowUpRight,
   Trash2
 } from 'lucide-react';
+import GovBrTransparencyBanner from './GovBrTransparencyBanner';
 
 interface ProjectsTabProps {
   projects: Project[];
@@ -300,21 +301,30 @@ export default function ProjectsTab({
   // =========================================================================
   if (currentProject) {
     const linkedEmenda = emendas.find(e => e.id === currentProject.emendaId);
-    
+
+    // Check if financial values are marked as pending / 'A lançar'
+    const isValuesPending = Boolean(
+      currentProject.isValuesPending ||
+      currentProject.financialStatusNote?.toLowerCase().includes('lançar') ||
+      currentProject.financialStatusNote?.toLowerCase().includes('apurar') ||
+      currentProject.id === 'sonhos-da-juventude'
+    );
+
     // Check if financial info exists
-    const hasFinancialInfo = 
+    const hasFinancialInfo = !isValuesPending && (
       (currentProject.receivedAmount !== undefined && currentProject.receivedAmount > 0) ||
       (currentProject.provenExpenses !== undefined && currentProject.provenExpenses > 0) ||
       (currentProject.budget !== undefined && currentProject.budget > 0) ||
-      linkedEmenda !== undefined;
+      (linkedEmenda !== undefined && (linkedEmenda.amount || 0) > 0)
+    );
 
-    const receivedVal = currentProject.receivedAmount || (linkedEmenda ? linkedEmenda.amount : currentProject.budget);
-    const provenVal = currentProject.provenExpenses !== undefined 
+    const receivedVal = isValuesPending ? undefined : (currentProject.receivedAmount || (linkedEmenda && linkedEmenda.amount > 0 ? linkedEmenda.amount : currentProject.budget));
+    const provenVal = isValuesPending ? undefined : (currentProject.provenExpenses !== undefined 
       ? currentProject.provenExpenses 
-      : (currentProject.status === 'concluido' && receivedVal ? receivedVal : undefined);
-    const balanceVal = currentProject.balance !== undefined 
+      : (currentProject.status === 'concluido' && receivedVal ? receivedVal : undefined));
+    const balanceVal = isValuesPending ? undefined : (currentProject.balance !== undefined 
       ? currentProject.balance 
-      : (receivedVal !== undefined && provenVal !== undefined ? receivedVal - provenVal : 0);
+      : (receivedVal !== undefined && provenVal !== undefined ? receivedVal - provenVal : 0));
 
     // Official formalization items (Transferegov, Concedente, Emenda, etc.)
     // Rule: Campos sem conteúdo não devem aparecer
@@ -733,7 +743,54 @@ export default function ProjectsTab({
             )}
 
             {/* Execução Financeira (Recurso recebido, despesas comprovadas e saldo quando houver dados reais) */}
-            {hasFinancialInfo ? (
+            {isValuesPending ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200">
+                    <span className="text-[11px] font-bold text-amber-900/70 uppercase tracking-wider block">
+                      Recurso recebido
+                    </span>
+                    <span className="text-lg sm:text-2xl font-black text-amber-950 block mt-1">
+                      A lançar
+                    </span>
+                    <span className="text-[10px] text-amber-700/80 block mt-0.5">
+                      Valor em apuração oficial
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200">
+                    <span className="text-[11px] font-bold text-amber-900/70 uppercase tracking-wider block">
+                      Despesas comprovadas
+                    </span>
+                    <span className="text-lg sm:text-2xl font-black text-amber-950 block mt-1">
+                      A lançar
+                    </span>
+                    <span className="text-[10px] text-amber-700/80 block mt-0.5">
+                      Comprovantes em conferência
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                      Saldo
+                    </span>
+                    <span className="text-lg sm:text-2xl font-black text-slate-700 block mt-1">
+                      A apurar
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                      Sem impacto no cálculo final
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 text-xs text-amber-950 flex items-start gap-2.5">
+                  <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">
+                    <strong>Controle Social & Transparência:</strong> Os valores financeiros deste projeto constam oficialmente como <strong>"A lançar"</strong> e estão em fase de apuração documental para garantir a integridade dos dados e não gerar distorções nas contas consolidadas da instituição.
+                  </span>
+                </div>
+              </div>
+            ) : hasFinancialInfo ? (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                   <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100">
@@ -986,6 +1043,9 @@ export default function ProjectsTab({
           </p>
         </div>
 
+        {/* Painel Oficial de Propostas e Instrumentos - Transferegov */}
+        <GovBrTransparencyBanner className="max-w-5xl mx-auto shadow-md" />
+
         {/* Filter Navigation Bar: Todos | Realizados | Aprovados */}
         <div className="flex justify-center">
           <div className="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300/60 gap-1.5 shadow-2xs">
@@ -1131,15 +1191,20 @@ export default function ProjectsTab({
                           {p.title}
                         </h3>
 
-                        {/* Proposal Number Badge (quando houver número de proposta oficial) */}
-                        {p.proposalNumber && (
-                          <div className="pt-0.5">
+                        {/* Proposal Number or Pending Values Badge */}
+                        <div className="pt-0.5 flex flex-wrap gap-1.5">
+                          {p.proposalNumber && (
                             <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200">
                               <FileText className="w-3.5 h-3.5 text-emerald-600" />
                               Proposta nº {p.proposalNumber}
                             </span>
-                          </div>
-                        )}
+                          )}
+                          {(p.isValuesPending || p.financialStatusNote?.toLowerCase().includes('lançar') || p.id === 'sonhos-da-juventude') && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200">
+                              Valores a lançar
+                            </span>
+                          )}
+                        </div>
 
                         {/* Short Summary (3 a 4 linhas) */}
                         <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">

@@ -67,8 +67,19 @@ export default function App() {
           addDeletedProjectId(r.projectId);
         }
       });
-      // Filter out internal tombstones from standard transparency records
-      const cleanRecords = dbRecords.filter((r: any) => r.type !== 'tombstone_project');
+      // Filter out internal tombstones from standard transparency records and sanitize pending amounts
+      const cleanRecords = dbRecords
+        .filter((r: any) => r.type !== 'tombstone_project')
+        .map((r: any) => {
+          if (r.id === 'conta-2022-sonhos' || r.id === 'nf-sonhos-2022') {
+            return {
+              ...r,
+              amount: undefined,
+              title: r.title.includes('Valores a lançar') ? r.title : `${r.title} (Valores a lançar)`
+            };
+          }
+          return r;
+        });
       setRecords(cleanRecords);
     }, initialRecords);
 
@@ -90,6 +101,14 @@ export default function App() {
             ...initP,
             ...merged[existingIdx]
           };
+          if (initP.id === 'sonhos-da-juventude') {
+            merged[existingIdx].receivedAmount = undefined;
+            merged[existingIdx].budget = undefined;
+            merged[existingIdx].provenExpenses = undefined;
+            merged[existingIdx].balance = undefined;
+            merged[existingIdx].isValuesPending = true;
+            merged[existingIdx].financialStatusNote = initP.financialStatusNote;
+          }
         }
       });
       setProjects(merged);
@@ -107,6 +126,10 @@ export default function App() {
             ...initE,
             ...merged[existingIdx]
           };
+          if (initE.id === 'emenda-2022-01') {
+            merged[existingIdx].amount = 0;
+            merged[existingIdx].description = initE.description;
+          }
         }
       });
       setEmendas(merged);
